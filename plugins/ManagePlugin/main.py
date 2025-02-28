@@ -7,6 +7,7 @@ from database import BotDatabase
 from utils.decorators import *
 from utils.plugin_base import PluginBase
 from utils.plugin_manager import plugin_manager
+from loguru import logger
 
 
 class ManagePlugin(PluginBase):
@@ -44,6 +45,7 @@ class ManagePlugin(PluginBase):
             return
 
         plugin_name = command[1] if len(command) > 1 else None
+        logger.info(command)
         if command[0] == "加载插件":
             if plugin_name in plugin_manager.plugins.keys():
                 await bot.send_text_message(message["FromWxid"], "⚠️插件已经加载")

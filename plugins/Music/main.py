@@ -52,6 +52,8 @@ class Music(PluginBase):
                                       [message["SenderWxid"]])
             return
         title = data["title"]
+        if "你不是真正的快乐" in title:
+            title = title.replace("不是", "84")
         singer = data["singer"]
         url = data["link"]
         music_url = data["music_url"].split("?")[0]

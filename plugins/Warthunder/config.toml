@@ -1,5 +1,5 @@
 [Warthunder]
-enable = true
+enable = false
 command = ["战争雷霆", "战雷查询", "战争雷霆玩家", "战雷玩家"]
 command-format = """
 -----XYBot-----

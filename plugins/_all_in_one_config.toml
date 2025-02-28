@@ -5,7 +5,7 @@ api-key = "" # Dify的API Key
 base-url = "https://api.dify.ai/v1" #Dify API接口base url
 
 commands = ["ai", "dify", "聊天", "AI"]
-command-tip = """-----XYBot-----
+command-tip = """-----小可爱-----
 💬AI聊天指令：
 聊天 请求内容
 """
@@ -23,9 +23,9 @@ whitelist_ignore = true #白名单是否忽略扣除
 http-proxy = ""
 
 [BotStatus]
-enable = true
+enable = false
 command = ["status", "bot", "机器人状态", "状态"]
-status-message = "XYBot Running! 😊"
+status-message = "小可爱 Running! 😊"
 
 [ManagePlugin]
 command = ["加载插件", "加载所有插件", "卸载插件", "卸载所有插件", "重载插件", "重载所有插件", "插件列表", "插件信息"]
@@ -37,18 +37,18 @@ command-format = """⚙️获取天气：
 天气城市名
 城市名天气
 城市名 天气"""
-api-key = "api-key" # 申请链接： https://dev.qweather.com/  项目订阅选免费订阅即可，把获得到的Key (不是Public ID 而是Private KEY) 填到上面引号中
+api-key = "ed9f00ef71c84846991789849d5b0d17" # 申请链接： https://dev.qweather.com/  项目订阅选免费订阅即可，把获得到的Key (不是Public ID 而是Private KEY) 填到上面引号中
 
 [RandomPicture]
 enable = true
 command = ["随机图片", "随机图图"]
 
 [QueryPoint]
-enable = true
+enable = false
 command = ["查询积分", "积分", "我的积分", "积分查询"]
 
 [SignIn]
-enable = true
+enable = false
 command = ["签到", "每日签到", "qd", "Qd", "QD"]
 min-point = 3
 max-point = 20
@@ -56,7 +56,7 @@ streak-cycle = 5 # 每签到?天后，额外积分奖励加1点？
 max-streak-point = 10 # 额外积分奖励上限
 
 [AdminPoint]
-enable = true
+enable = false
 command-format = """⚙️管理积分
 
 ➕积分：
@@ -70,7 +70,7 @@ command-format = """⚙️管理积分
 
 
 [AdminSignInReset]
-enable = true
+enable = false
 command = ["重置签到", "重置签到状态"]
 
 [AdminWhitelist]
@@ -111,7 +111,7 @@ enable = true
 command = ["获取联系人", "联系人", "通讯录", "获取通讯录"]
 
 [Leaderboard]
-enable = true
+enable = false
 command = ["排行榜", "积分榜", "积分排行榜", "群排行榜", "群积分榜"]
 max-count = 30
 
@@ -120,10 +120,10 @@ enable = true
 command = ["新闻", "新闻速递", "新闻资讯", "新闻头条", "新闻列表", "随机新闻", "获取新闻", "获取随机新闻", "头条", "头条新闻", "今日头条", "今日新闻"]
 
 [PointTrade]
-enable = true
+enable = false
 command = ["积分交易", "积分转账", "转账积分", "积分赠送", "赠送积分", "积分转移", "转移积分", "送积分", "积分送人", "送人积分", "积分赠予", "赠予"]
 command-format = """
------XYBot-----
+-----小可爱-----
 🔄转账积分：
 积分转账 积分数 @用户
 """
@@ -132,7 +132,7 @@ command-format = """
 enable = true
 command = ["战争雷霆", "战雷查询", "战争雷霆玩家", "战雷玩家"]
 command-format = """
------XYBot-----
+-----小可爱-----
 🎮战争雷霆玩家查询：
 战雷查询 玩家名
 """
@@ -141,7 +141,7 @@ command-format = """
 enable = true
 command = ["点歌", "音乐", "音乐点播", "点播音乐", "音乐点歌"]
 command-format = """
------XYBot-----
+-----小可爱-----
 🎵点歌指令：
 点歌 歌曲名
 """
@@ -150,7 +150,7 @@ command-format = """
 enable = true
 command = ["抽奖", "幸运抽奖", "抽奖活动", "抽奖指令", "幸运大抽奖", "大抽奖", "积分抽奖"]
 command-format = """
------XYBot-----
+-----小可爱-----
 🎉抽奖指令：
 抽奖 奖池名 次数
 次数可选
@@ -208,7 +208,7 @@ max-time = 300
 [Menu]
 enable = true
 command = ["菜单", "帮助", "帮助菜单", "功能列表", "功能菜单", "指令列表", "指令菜单", "功能", "指令", "cd", "Cd", "cd", "menu", "Menu"]
-menu = """-======== XYBot ========-
+menu = """-======== 小可爱 ========-
 🤖AI聊天🤖 (可指令可群@可私信语音可私信图片)
 ☁️天气☁️          🎵点歌🎵
 📰新闻📰           ♟️五子棋♟️
@@ -222,7 +222,7 @@ menu = """-======== XYBot ========-
 
 ⚙️查看管理员菜单请发送：管理员菜单"""
 
-admin-menu = """-----XYBot-----
+admin-menu = """-----小可爱-----
 ⚙️管理积分：
 ➕积分：
 加积分 积分 wxid/@用户
@@ -282,7 +282,3 @@ bot_app_key = "" #腾讯大模型知识引擎
 # 其他插件的指令要填进下面，以免冲突
 other-plugin-cmd = ["status", "bot", "机器人状态", "状态", "加载插件", "加载所有插件", "卸载插件", "卸载所有插件", "重载插件", "重载所有插件", "插件列表", "插件信息", "随机图片", "随机图图", "查询积分", "积分", "我的积分", "积分查询", "签到", "每日签到", "qd", "Qd", "QD", "重置签到", "重置签到状态", "五子棋", "五子棋创建", "五子棋邀请", "邀请五子棋", "接受", "加入", "下棋", "获取联系人", "联系人", "通讯录", "获取通讯录", "排行榜", "积分榜", "积分排行榜", "群排行榜", "群积分榜", "新闻", "新闻速递", "新闻资讯", "新闻头条", "新闻列表", "随机新闻", "获取新闻", "获取随机新闻", "头条", "头条新闻", "今日头条", "今日新闻", "积分交易", "积分转账", "转账积分", "积分赠送", "赠送积分", "积分转移", "转移积分", "送积分", "积分送人", "送人积分", "积分赠予", "赠予", "战争雷霆", "战雷查询", "战争雷霆玩家", "战雷玩家", "点歌", "音乐", "音乐点播", "点播音乐", "音乐点歌", "抽奖", "幸运抽奖", "抽奖活动", "抽奖指令", "幸运大抽奖", "大抽奖", "积分抽奖", "菜单", "帮助", "帮助菜单", "功能列表", "功能菜单", "指令列表", "指令菜单", "功能", "指令", "cd", "Cd", "cd", "menu", "Menu", "发红包", "抢红包", "加积分", "减积分", "设置积分", "添加白名单", "删除白名单", "白名单列表", "重置签到", "加载插件", "加载所有插件", "卸载插件", "卸载所有插件", "重载插件", "重载所有插件", "插件列表", "随机成员", "随机群员", "随机群成员", "随机群用户"]
 
-# Http代理设置
-# 格式: http://用户名:密码@代理地址:代理端口
-# 例如：http://127.0.0.1:7890
-http-proxy = ""

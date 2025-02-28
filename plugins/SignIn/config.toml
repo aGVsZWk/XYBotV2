@@ -1,5 +1,5 @@
 [SignIn]
-enable = true
+enable = false
 command = ["签到", "每日签到", "qd", "Qd", "QD"]
 min-point = 3
 max-point = 20

@@ -1,0 +1,3 @@
+[Joke]
+enable = true
+command = ["笑话", "随机笑话", "讲笑话", "开心"]

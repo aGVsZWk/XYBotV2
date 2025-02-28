@@ -28,6 +28,7 @@ async def bot_core():
     # 启动WechatAPI服务
     server = WechatAPI.WechatAPIServer()
     api_config = main_config.get("WechatAPIServer", {})
+    print(api_config)
     redis_host = api_config.get("redis-host", "127.0.0.1")
     redis_port = api_config.get("redis-port", 6379)
     logger.debug("Redis 主机地址: {}:{}", redis_host, redis_port)

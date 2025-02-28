@@ -49,6 +49,7 @@ class Dify(PluginBase):
 
     @on_text_message
     async def handle_text(self, bot: WechatAPIClient, message: dict):
+        logger.info("aaaaaaaa")
         if not self.enable:
             return
 

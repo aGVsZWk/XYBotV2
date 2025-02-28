@@ -1,5 +1,5 @@
 [AdminPoint]
-enable = true
+enable = false
 command-format = """⚙️管理积分
 
 ➕积分：

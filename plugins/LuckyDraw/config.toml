@@ -1,5 +1,5 @@
 [LuckyDraw]
-enable = true
+enable = false
 command = ["抽奖", "幸运抽奖", "抽奖活动", "抽奖指令", "幸运大抽奖", "大抽奖", "积分抽奖"]
 command-format = """
 -----XYBot-----
