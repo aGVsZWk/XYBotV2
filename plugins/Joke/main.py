@@ -50,7 +50,7 @@ class JokePlugin(PluginBase):
         data_path = os.path.join(curdir, f)
         data = linecache.getline(data_path, no)
         data = json.loads(data)
-        output = "嘿嘿，宝子，我给你找了个笑话：\n" + "-----XYBot-----\n" + data["content"]
+        output = "嘿嘿，宝子，我给你找了个笑话，专治无聊、不开心：\n" + "-----小可爱-----\n" + data["content"]
         return output
 
     @on_text_message(priority=81)

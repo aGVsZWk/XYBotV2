@@ -13,10 +13,15 @@ from utils.decorators import *
 from utils.plugin_base import PluginBase
 
 
+
 class Dify(PluginBase):
     description = "Dify插件"
     author = "HenryXiaoYang"
-    version = "1.0.0"
+    version = "1.1.0"
+
+    # Change Log
+    # 1.1.0 2025-02-20 插件优先级，插件阻塞
+    # 1.2.0 2025-02-22 有插件阻塞了，other-plugin-cmd可删了
 
     def __init__(self):
         super().__init__()
@@ -32,12 +37,17 @@ class Dify(PluginBase):
         plugin_config = config["Dify"]
 
         self.enable = plugin_config["enable"]
-        self.api_key = plugin_config["api-key"]
+        self.api_key_keai = plugin_config["keai-api-key"]
+        self.api_key_zorg = plugin_config["zorg-api-key"]
+        self.api_key_y3i3 = plugin_config["y3i3-api-key"]
+        # self.api_key = plugin_config["api-key"]
         self.base_url = plugin_config["base-url"]
+        self.base_resource_path = plugin_config["base-resource-path"]
 
         self.commands = plugin_config["commands"]
-        self.other_plugin_cmd = plugin_config["other-plugin-cmd"]
         self.command_tip = plugin_config["command-tip"]
+        self.other_plugin_cmd = plugin_config["other-plugin-cmd"]
+
 
         self.price = plugin_config["price"]
         self.admin_ignore = plugin_config["admin_ignore"]
@@ -47,9 +57,8 @@ class Dify(PluginBase):
 
         self.db = BotDatabase()
 
-    @on_text_message
+    @on_text_message(priority=20)
     async def handle_text(self, bot: WechatAPIClient, message: dict):
-        logger.info("aaaaaaaa")
         if not self.enable:
             return
 
@@ -60,27 +69,43 @@ class Dify(PluginBase):
         elif len(command) == 1 and command[0] in self.commands:  # 只是指令，但没请求内容
             await bot.send_at_message(message["FromWxid"], "\n" + self.command_tip, [message["SenderWxid"]])
             return
+        
         elif command and command[0] in self.other_plugin_cmd:  # 指令来自其他插件
             return
 
+        if not self.api_key_keai:
+            await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
+            return False
+
         if await self._check_point(bot, message):
             await self.dify(bot, message, message["Content"])
+        return False
 
-    @on_at_message
+    @on_at_message(priority=20)
     async def handle_at(self, bot: WechatAPIClient, message: dict):
         if not self.enable:
             return
 
+        if not self.api_key_keai:
+            await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
+            return False
+
         if await self._check_point(bot, message):
             await self.dify(bot, message, message["Content"])
 
-    @on_voice_message
+        return False
+
+    @on_voice_message(priority=20)
     async def handle_voice(self, bot: WechatAPIClient, message: dict):
         if not self.enable:
             return
 
         if message["IsGroup"]:
             return
+
+        if not self.api_key_keai:
+            await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
+            return False
 
         if await self._check_point(bot, message):
             upload_file_id = await self.upload_file(message["FromWxid"], message["Content"])
@@ -95,13 +120,19 @@ class Dify(PluginBase):
 
             await self.dify(bot, message, " \n", files)
 
-    @on_image_message
+        return False
+
+    @on_image_message(priority=20)
     async def handle_image(self, bot: WechatAPIClient, message: dict):
         if not self.enable:
             return
 
         if message["IsGroup"]:
             return
+
+        if not self.api_key_keai:
+            await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
+            return False
 
         if await self._check_point(bot, message):
             upload_file_id = await self.upload_file(message["FromWxid"], bot.base64_to_byte(message["Content"]))
@@ -116,13 +147,19 @@ class Dify(PluginBase):
 
             await self.dify(bot, message, " \n", files)
 
-    @on_video_message
+        return False
+
+    @on_video_message(priority=20)
     async def handle_video(self, bot: WechatAPIClient, message: dict):
         if not self.enable:
             return
 
         if message["IsGroup"]:
             return
+
+        if not self.api_key_keai:
+            await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
+            return False
 
         if await self._check_point(bot, message):
             upload_file_id = await self.upload_file(message["FromWxid"], bot.base64_to_byte(message["Video"]))
@@ -137,13 +174,19 @@ class Dify(PluginBase):
 
             await self.dify(bot, message, " \n", files)
 
-    @on_file_message
+        return False
+
+    @on_file_message(priority=20)
     async def handle_file(self, bot: WechatAPIClient, message: dict):
         if not self.enable:
             return
 
         if message["IsGroup"]:
             return
+
+        if not self.api_key_keai:
+            await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
+            return False
 
         if await self._check_point(bot, message):
             upload_file_id = await self.upload_file(message["FromWxid"], message["Content"])
@@ -158,12 +201,26 @@ class Dify(PluginBase):
 
             await self.dify(bot, message, " \n", files)
 
+        return False
+
     async def dify(self, bot: WechatAPIClient, message: dict, query: str, files=None):
         if files is None:
             files = []
         conversation_id = self.db.get_llm_thread_id(message["FromWxid"],
                                                     namespace="dify")
-        headers = {"Authorization": f"Bearer {self.api_key}",
+        logger.info(f"query: {query}")
+        if "小可爱" in query:
+            key = self.api_key_keai
+            query = query.replace("小可爱", "", 1).lstrip()
+        elif "ZORG" in query or "zorg" in query:
+            query = query.replace("ZORG", "", 1).replace("zorg", "", 1).lstrip()
+            key = self.api_key_zorg
+        elif "Y3I3" in query or "y3i3" in query:
+            query = query.replace("Y3I3", "", 1).replace("y3i3", "", 1).lstrip()
+            key = self.api_key_y3i3
+        else:
+            key = self.api_key_keai
+        headers = {"Authorization": f"Bearer {key}",  # TODO
                    "Content-Type": "application/json"}
         payload = json.dumps({
             "inputs": {},
@@ -188,6 +245,7 @@ class Dify(PluginBase):
                         elif line.startswith("data: "):  # 脑瘫吧，为什么前面要加 "data: " ？？？
                             line = line[6:]
 
+                        logger.info(line)
                         try:
                             resp_json = json.loads(line)
                         except json.decoder.JSONDecodeError:
@@ -231,7 +289,7 @@ class Dify(PluginBase):
             await self.dify_handle_text(bot, message, ai_resp)
 
     async def upload_file(self, user: str, file: bytes):
-        headers = {"Authorization": f"Bearer {self.api_key}"}
+        headers = {"Authorization": f"Bearer {self.api_key_keai}"}
 
         # user multipart/form-data
         kind = filetype.guess(file)
@@ -248,9 +306,12 @@ class Dify(PluginBase):
         return resp_json.get("id", "")
 
     async def dify_handle_text(self, bot: WechatAPIClient, message: dict, text: str):
-        pattern = r"\]\((https?:\/\/[^\s\)]+)\)"
+        # pattern = r"\]\((https?:\/\/[^\s\)]+)\)"
+        pattern = r"\]\(([^\s\)]+)\)"
         links = re.findall(pattern, text)
-        for url in links:
+        for _url in links:
+            url = self.base_resource_path + _url
+            logger.info(url)
             file = await self.download_file(url)
             extension = filetype.guess_extension(file)
             if extension in ('wav', 'mp3'):
@@ -260,10 +321,36 @@ class Dify(PluginBase):
             elif extension in ('mp4', 'avi', 'mov', 'mkv', 'flv'):
                 await bot.send_video_message(message["FromWxid"], video=file, image="None")
 
-        pattern = r'\[[^\]]+\]\(https?:\/\/[^\s\)]+\)'
+        # pattern = r'\[[^\]]+\]\(https?:\/\/[^\s\)]+\)'
+        pattern = r'\[[^\]]+\]\([^\s\)]+\)'
         text = re.sub(pattern, '', text)
         if text:
-            await bot.send_at_message(message["FromWxid"], "\n" + text, [message["SenderWxid"]])
+            if "@" in text:
+                text = text.replace(" ", "\u2005")
+                await bot.send_text_message(message["FromWxid"], text)
+            else:
+                try:
+                    text = json.loads(text)
+                    test_data = {
+                        'video': text["url"],
+                        'title': text["desc"],
+                        'name': text["nickname"],
+                        'cover': 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/7c/49/e1/7c49e1af-ce92-d1c4-9a93-0a316e47ba94/AppIcon_TikTok-0-0-1x_U007epad-0-1-0-0-85-220.png/512x512bb.jpg'
+                    }
+                    logger.info("开始发送测试卡片")
+                    logger.debug(f"测试数据: {test_data}")
+                    # 发送测试卡片
+                    await bot.send_link_message(
+                        wxid=message["FromWxid"],
+                        url=test_data['video'],
+                        title=f"{test_data['title'][:30]} - {test_data['name'][:10]}",
+                        description=text["desc"],
+                        thumb_url=test_data['cover']
+                    )
+                except:
+                    text = text
+                    await bot.send_at_message(message["FromWxid"], "\n" + text, [message["SenderWxid"]])
+
 
     async def download_file(self, url: str) -> bytes:
         async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
@@ -289,7 +376,7 @@ class Dify(PluginBase):
     async def dify_handle_error(bot: WechatAPIClient, message: dict, task_id: str, message_id: str, status: str,
                                 code: int, err_message: str):
         output = ("-----XYBot-----\n"
-                  "🙅对不起，Dify出现错误！\n"
+                  "ð对不起，Dify出现错误！\n"
                   f"任务 ID：{task_id}\n"
                   f"消息唯一 ID：{message_id}\n"
                   f"HTTP 状态码：{status}\n"
@@ -300,19 +387,19 @@ class Dify(PluginBase):
     @staticmethod
     async def handle_400(bot: WechatAPIClient, message: dict, resp: aiohttp.ClientResponse):
         output = ("-----XYBot-----\n"
-                  "🙅对不起，出现错误！\n"
+                  "ð对不起，出现错误！\n"
                   f"错误信息：{(await resp.content.read()).decode('utf-8')}")
         await bot.send_at_message(message["FromWxid"], "\n" + output, [message["SenderWxid"]])
 
     @staticmethod
     async def handle_500(bot: WechatAPIClient, message: dict):
-        output = "-----XYBot-----\n🙅对不起，Dify服务内部异常，请稍后再试。"
+        output = "-----XYBot-----\nð对不起，Dify服务内部异常，请稍后再试。"
         await bot.send_at_message(message["FromWxid"], "\n" + output, [message["SenderWxid"]])
 
     @staticmethod
     async def handle_other_status(bot: WechatAPIClient, message: dict, resp: aiohttp.ClientResponse):
         ai_resp = ("-----XYBot-----\n"
-                   f"🙅对不起，出现错误！\n"
+                   f"ð对不起，出现错误！\n"
                    f"状态码：{resp.status}\n"
                    f"错误信息：{(await resp.content.read()).decode('utf-8')}")
         await bot.send_at_message(message["FromWxid"], "\n" + ai_resp, [message["SenderWxid"]])
@@ -320,7 +407,7 @@ class Dify(PluginBase):
     @staticmethod
     async def hendle_exceptions(bot: WechatAPIClient, message: dict):
         output = ("-----XYBot-----\n"
-                  "🙅对不起，出现错误！\n"
+                  "ð对不起，出现错误！\n"
                   f"错误信息：\n"
                   f"{traceback.format_exc()}")
         await bot.send_at_message(message["FromWxid"], "\n" + output, [message["SenderWxid"]])
@@ -336,9 +423,10 @@ class Dify(PluginBase):
             if self.db.get_points(wxid) < self.price:
                 await bot.send_at_message(message["FromWxid"],
                                           f"\n-----XYBot-----\n"
-                                          f"😭你的积分不够啦！需要 {self.price} 积分",
+                                          f"ð­你的积分不够啦！需要 {self.price} 积分",
                                           [wxid])
                 return False
 
             self.db.add_points(wxid, -self.price)
             return True
+

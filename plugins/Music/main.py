@@ -1,4 +1,5 @@
 import tomllib
+from loguru import logger
 
 import aiohttp
 
@@ -24,8 +25,9 @@ class Music(PluginBase):
         self.command = config["command"]
         self.command_format = config["command-format"]
 
-    @on_text_message
+    @on_text_message(priority=82)
     async def handle_text(self, bot: WechatAPIClient, message: dict):
+        logger.info("aaaaaaaaaaaaa")
         if not self.enable:
             return
 
@@ -36,12 +38,13 @@ class Music(PluginBase):
             return
 
         if len(command) == 1:
-            await bot.send_at_message(message["FromWxid"], f"-----XYBot-----\n❌命令格式错误！{self.command_format}",
+            await bot.send_at_message(message["FromWxid"], f"-----Y3I3-----\n❌命令格式错误！{self.command_format}",
                                       [message["SenderWxid"]])
             return
 
         song_name = content[len(command[0]):].strip()
-
+        if "倔强" in song_name:
+            song_name = song_name.replace("倔强", "你不是真正的快乐")
         async with aiohttp.ClientSession() as session:
             async with session.get(
                     f"https://www.hhlqilongzhu.cn/api/dg_wyymusic.php?gm={song_name}&n=1&br=2&type=json") as resp:
@@ -53,7 +56,7 @@ class Music(PluginBase):
             return
         title = data["title"]
         if "你不是真正的快乐" in title:
-            title = title.replace("不是", "84")
+            title = title.replace("你不是真正的快乐", "倔强")
         singer = data["singer"]
         url = data["link"]
         music_url = data["music_url"].split("?")[0]

@@ -1,13 +1,18 @@
 [Dify]
 enable = true
+# keai-api-key = "app-nJTrzHtjJSVf7uUVsIKK3RJQ" # Dify的API Key
+keai-api-key = "app-6YDLxQk3RhXeBzQcgpXDdeJu" # Dify的API Key
+# y3i3-api-key = "app-6YDLxQk3RhXeBzQcgpXDdeJu"
+y3i3-api-key = "app-6YDLxQk3RhXeBzQcgpXDdeJu"
+zorg-api-key = "app-OwBu05dBlohiBLNGLt83d7kj" # Dify的API Key
 
-api-key = "app-nJTrzHtjJSVf7uUVsIKK3RJQ" # Dify的API Key
 base-url = "http://192.168.1.14/v1" 
+base-resource-path = "http://192.168.1.14"
 
 
 #Dify API接口base url
 
-commands = ["ai", "dify", "聊天", "AI", "小可爱", "ZORG"]
+commands = ["ai", "dify", "聊天", "AI", "小可爱", "ZORG", "Y3I3"]
 command-tip = """-----XYBot-----
 💬AI聊天指令：
 聊天 请求内容
