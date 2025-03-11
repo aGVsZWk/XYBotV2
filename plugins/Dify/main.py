@@ -40,6 +40,7 @@ class Dify(PluginBase):
         self.api_key_keai = plugin_config["keai-api-key"]
         self.api_key_zorg = plugin_config["zorg-api-key"]
         self.api_key_y3i3 = plugin_config["y3i3-api-key"]
+        self.api_key = self.api_key_keai
         # self.api_key = plugin_config["api-key"]
         self.base_url = plugin_config["base-url"]
         self.base_resource_path = plugin_config["base-resource-path"]
@@ -73,12 +74,25 @@ class Dify(PluginBase):
         elif command and command[0] in self.other_plugin_cmd:  # 指令来自其他插件
             return
 
-        if not self.api_key_keai:
+        if not self.api_key:
             await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
             return False
 
         if await self._check_point(bot, message):
-            await self.dify(bot, message, message["Content"])
+            if "小可爱" in message["Content"]:
+                key = self.api_key_keai
+                query = message["Content"].replace("小可爱", "", 1).lstrip()
+            elif "ZORG" in message["Content"] or "zorg" in message["Content"]:
+                query = message["Content"].replace("ZORG", "", 1).replace("zorg", "", 1).lstrip()
+                key = self.api_key_zorg
+            elif "Y3I3" in message["Content"] or "y3i3" in message["Content"]:
+                query = message["Content"].replace("Y3I3", "", 1).replace("y3i3", "", 1).lstrip()
+                key = self.api_key_y3i3
+            else:
+                key = self.api_key_keai
+                query = message["Content"]
+            self.api_key = key
+            await self.dify(bot, message, query)
         return False
 
     @on_at_message(priority=20)
@@ -86,7 +100,7 @@ class Dify(PluginBase):
         if not self.enable:
             return
 
-        if not self.api_key_keai:
+        if not self.api_key:
             await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
             return False
 
@@ -103,7 +117,7 @@ class Dify(PluginBase):
         if message["IsGroup"]:
             return
 
-        if not self.api_key_keai:
+        if not self.api_key:
             await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
             return False
 
@@ -127,10 +141,10 @@ class Dify(PluginBase):
         if not self.enable:
             return
 
-        if message["IsGroup"]:
-            return
+        # if message["IsGroup"]:
+        #     return
 
-        if not self.api_key_keai:
+        if not self.api_key:
             await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
             return False
 
@@ -157,7 +171,7 @@ class Dify(PluginBase):
         if message["IsGroup"]:
             return
 
-        if not self.api_key_keai:
+        if not self.api_key:
             await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
             return False
 
@@ -184,7 +198,7 @@ class Dify(PluginBase):
         if message["IsGroup"]:
             return
 
-        if not self.api_key_keai:
+        if not self.api_key:
             await bot.send_at_message(message["FromWxid"], "\n你还没配置Dify API密钥！", [message["SenderWxid"]])
             return False
 
@@ -209,18 +223,8 @@ class Dify(PluginBase):
         conversation_id = self.db.get_llm_thread_id(message["FromWxid"],
                                                     namespace="dify")
         logger.info(f"query: {query}")
-        if "小可爱" in query:
-            key = self.api_key_keai
-            query = query.replace("小可爱", "", 1).lstrip()
-        elif "ZORG" in query or "zorg" in query:
-            query = query.replace("ZORG", "", 1).replace("zorg", "", 1).lstrip()
-            key = self.api_key_zorg
-        elif "Y3I3" in query or "y3i3" in query:
-            query = query.replace("Y3I3", "", 1).replace("y3i3", "", 1).lstrip()
-            key = self.api_key_y3i3
-        else:
-            key = self.api_key_keai
-        headers = {"Authorization": f"Bearer {key}",  # TODO
+
+        headers = {"Authorization": f"Bearer {self.api_key}",  # TODO
                    "Content-Type": "application/json"}
         payload = json.dumps({
             "inputs": {},
@@ -289,7 +293,7 @@ class Dify(PluginBase):
             await self.dify_handle_text(bot, message, ai_resp)
 
     async def upload_file(self, user: str, file: bytes):
-        headers = {"Authorization": f"Bearer {self.api_key_keai}"}
+        headers = {"Authorization": f"Bearer {self.api_key}"}
 
         # user multipart/form-data
         kind = filetype.guess(file)
