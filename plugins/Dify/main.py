@@ -81,18 +81,18 @@ class Dify(PluginBase):
         if await self._check_point(bot, message):
             if "小可爱" in message["Content"]:
                 key = self.api_key_keai
-                query = message["Content"].replace("小可爱", "", 1).lstrip()
+                # query = message["Content"].replace("小可爱", "", 1).lstrip()
             elif "ZORG" in message["Content"] or "zorg" in message["Content"]:
-                query = message["Content"].replace("ZORG", "", 1).replace("zorg", "", 1).lstrip()
+                # query = message["Content"].replace("ZORG", "", 1).replace("zorg", "", 1).lstrip()
                 key = self.api_key_zorg
             elif "Y3I3" in message["Content"] or "y3i3" in message["Content"]:
-                query = message["Content"].replace("Y3I3", "", 1).replace("y3i3", "", 1).lstrip()
+                # query = message["Content"].replace("Y3I3", "", 1).replace("y3i3", "", 1).lstrip()
                 key = self.api_key_y3i3
             else:
                 key = self.api_key_keai
-                query = message["Content"]
+                # query = message["Content"]
             self.api_key = key
-            await self.dify(bot, message, query)
+            await self.dify(bot, message, message["Content"])
         return False
 
     @on_at_message(priority=20)
@@ -248,8 +248,6 @@ class Dify(PluginBase):
                             continue
                         elif line.startswith("data: "):  # 脑瘫吧，为什么前面要加 "data: " ？？？
                             line = line[6:]
-
-                        logger.info(line)
                         try:
                             resp_json = json.loads(line)
                         except json.decoder.JSONDecodeError:
@@ -353,7 +351,7 @@ class Dify(PluginBase):
                     )
                 except:
                     text = text
-                    await bot.send_at_message(message["FromWxid"], "\n" + text, [message["SenderWxid"]])
+                    await bot.send_at_message(message["FromWxid"], text, [message["SenderWxid"]])
 
 
     async def download_file(self, url: str) -> bytes:
