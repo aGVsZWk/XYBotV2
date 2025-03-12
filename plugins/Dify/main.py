@@ -260,8 +260,10 @@ class Dify(PluginBase):
                             ai_resp = resp_json("answer", "")
                         elif event == "message_file":  # 文件事件 目前dify只输出图片
                             await self.dify_handle_image(bot, message, resp_json.get("url", ""))
+                            return
                         elif event == "tts_message":  # TTS 音频流结束事件
                             await self.dify_handle_audio(bot, message, resp_json.get("audio", ""))
+                            return
                         elif event == "error":  # 流式输出过程中出现的异常
                             await self.dify_handle_error(bot, message,
                                                          resp_json.get("task_id", ""),
@@ -269,7 +271,7 @@ class Dify(PluginBase):
                                                          resp_json.get("status", ""),
                                                          resp_json.get("code", ""),
                                                          resp_json.get("message", ""))
-
+                            return
                     new_con_id = resp_json.get("conversation_id", "")
                     if new_con_id and new_con_id != conversation_id:
                         self.db.save_llm_thread_id(message["FromWxid"], new_con_id, "dify")
