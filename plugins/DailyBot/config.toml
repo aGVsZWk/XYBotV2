@@ -52,7 +52,7 @@ zodiac_mapping = """
 default_order = "asc"
 
 [weather]
-show_clothing_index = false
+show_clothing_index = true
 forecast_hours = 10
 default_city = "北京"
 tip_format = "输入不规范，请输<国内城市+(今天|明天|后天|七天|7天)+天气>，比如 '广州天气'"

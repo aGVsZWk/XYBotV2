@@ -12,7 +12,8 @@ import pysilk
 from loguru import logger
 from pydub import AudioSegment
 from pymediainfo import MediaInfo
-
+import sqlite3  # 导入 sqlite3 模块
+import re
 from .base import *
 from .protect import protector
 from ..errors import *
@@ -24,6 +25,15 @@ class MessageMixin(WechatAPIClientBase):
         super().__init__(ip, port)
         self._message_queue = Queue()
         self._is_processing = False
+        self.db_file = "chat_history.db"  # 数据库文件名
+        self.db_connection = None
+        self.initialize_database() #初始化数据库
+
+    def initialize_database(self):
+         """初始化数据库连接"""
+         self.db_connection = sqlite3.connect(self.db_file)
+         logger.info("数据库连接已建立")
+
 
     async def _process_message_queue(self):
         """
@@ -97,6 +107,26 @@ class MessageMixin(WechatAPIClientBase):
             else:
                 self.error_handler(json_resp)
 
+    def get_table_name(self, chat_id: str) -> str:
+        """
+        生成表名，将chat_id中的特殊字符替换掉，避免SQL注入和表名错误
+        """
+        return "chat_" + re.sub(r"[^a-zA-Z0-9_]", "_", chat_id)
+
+    def save_message_to_db(self, chat_id: str, sender_wxid: str, create_time: int, content: str):
+        """将消息保存到数据库"""
+        table_name = self.get_table_name(chat_id)
+        try:
+            cursor = self.db_connection.cursor()
+            cursor.execute(f"""
+                INSERT INTO "{table_name}" (sender_wxid, create_time, content)
+                VALUES (?, ?, ?)
+            """, (sender_wxid, create_time, content))
+            self.db_connection.commit()
+            logger.debug(f"消息保存到表 {table_name}: sender_wxid={sender_wxid}, create_time={create_time}")
+        except sqlite3.Error as e:
+            logger.exception(f"保存消息到表 {table_name} 失败: {e}")
+
     async def send_text_message(self, wxid: str, content: str, at: Union[list, str] = "") -> tuple[int, int, int]:
         """发送文本消息。
 
@@ -140,6 +170,7 @@ class MessageMixin(WechatAPIClientBase):
             if json_resp.get("Success"):
                 logger.info("发送文字消息: 对方wxid:{} at:{} 内容:{}", wxid, at, content)
                 data = json_resp.get("Data")
+                self.save_message_to_db(wxid, "wxid_t8p67vpimx0d22", data.get("List")[0].get("Createtime"), content)
                 return data.get("List")[0].get("ClientMsgid"), data.get("List")[0].get("Createtime"), data.get("List")[
                     0].get("NewMsgId")
             else:
@@ -639,3 +670,4 @@ class MessageMixin(WechatAPIClientBase):
                 return json_resp.get("Data")
             else:
                 self.error_handler(json_resp)
+

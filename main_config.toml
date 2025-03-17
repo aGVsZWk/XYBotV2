@@ -3,7 +3,7 @@ port = 9000                # WechatAPI服务器端口，默认9000，如有冲�
 mode = "release"           # 运行模式：release(生产环境)，debug(调试模式)
 redis-host = "192.168.1.14"   # Redis服务器地址，本地使用127.0.0.1
 redis-port = 6379          # Redis端口，默认6379
-redis-password = "1234"        # Redis密码，如果有设置密码则填写
+redis-password = "difyai123456"        # Redis密码，如果有设置密码则填写
 redis-db = 0               # Redis数据库编号，默认0
 
 # XYBot 核心设置

@@ -63,7 +63,8 @@ class PatPlugin(PluginBase):
             return
 
         reply_msg = await self.get_hitokoto_info(c=random.choice(["a", "b", "c", "d", "e", "f", "g", "h", "j", "k"]))
+        # reply_msg = "来自拍一拍: " + reply_msg
         if message["IsGroup"] is True:
-            await bot.send_at_message(message["FromWxid"], reply_msg, [message["Patter"]])
+            await bot.send_at_message(message["FromWxid"], reply_msg, [message["Patted"]])
         else:
             await bot.send_text_message(message["FromWxid"], reply_msg)
