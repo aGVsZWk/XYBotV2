@@ -37,7 +37,10 @@ def predict_next_chat(messages, predict_user=""):
         # 筛选 UserA 的聊天记录
         order = df["sender_wxid"].value_counts().sort_index()
         # predict_user = 'wxid_acs3cg99vu1921'
-        predict_user = order.index[1]
+        if len(order.index) >= 1:
+            predict_user = order.index[1]
+        else:
+            predict_user = order.index[0]
 
     user_chats = df[df['sender_wxid'] == predict_user]
     # 按分钟聚合聊天次数
