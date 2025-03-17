@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import tomllib
@@ -6,7 +7,7 @@ import traceback
 import aiohttp
 import filetype
 from loguru import logger
-
+import random
 from WechatAPI import WechatAPIClient
 from database.database import BotDatabase
 from utils.decorators import *
@@ -331,6 +332,7 @@ class Dify(PluginBase):
         if text:
             if "@" in text:
                 text = text.replace(" ", "\u2005")
+                await asyncio.sleep(random.random() * 5)
                 await bot.send_text_message(message["FromWxid"], text)
             else:
                 try:
@@ -353,6 +355,7 @@ class Dify(PluginBase):
                     )
                 except:
                     text = text
+                    await asyncio.sleep(random.random() * 5)
                     await bot.send_at_message(message["FromWxid"], text, [message["SenderWxid"]])
 
 

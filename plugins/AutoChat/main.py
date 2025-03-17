@@ -311,7 +311,7 @@ class AutoChat(PluginBase):
                         elif reply_group_type == 2:
                             query = json.dumps({
                                 "chat_history": "",
-                                "receive_msg": "你想说点什么吗？"
+                                "receive_msg": "此时此刻，你表达一下你自己内心的想法"
                             })
                             message = {
                                 "FromWxid": self.get_chat_id(table),
@@ -458,7 +458,7 @@ class AutoChat(PluginBase):
 
                 elif resp.status == 404:
                     self.db.save_llm_thread_id(message["FromWxid"], "", "dify")
-                    return await self.dify(bot, message, json.loads(query)["receive_msg"])
+                    return await self.dify(bot, message, query)
 
                 elif resp.status == 400:
                     return await self.handle_400(bot, message, resp)
