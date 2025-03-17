@@ -289,7 +289,7 @@ class GuessIdiom(PluginBase):
                         os.remove(pic_path)
                     del self.game_sessions[chat_id]
             return True
-        if user_wxid in self.game_sessions:
+        if chat_id in self.game_sessions:
             # await bot.send_text_message(chat_id, XYBOT_PREFIX + GAME_TIP)
             return False
 
@@ -411,7 +411,7 @@ class GuessIdiom(PluginBase):
 
     async def check_answer(self, bot: WechatAPIClient, message: dict, chat_id: str, user_wxid: str, guess: str):
         """检查用户答案是否正确"""
-        if user_wxid not in self.game_sessions:
+        if chat_id not in self.game_sessions:
             await bot.send_at_message(chat_id, XYBOT_PREFIX + '🤔 你还没开始游戏哦！发送"开始"试试吧！', [user_wxid])
             return
 

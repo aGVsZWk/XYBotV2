@@ -77,7 +77,8 @@ class XYBot:
 
         elif msg_type == 51:
             pass
-
+        elif msg_type == 47:
+            logger.info("收到的可能是表情信息")
         else:
             logger.info("未知的消息类型: {}", message)
 

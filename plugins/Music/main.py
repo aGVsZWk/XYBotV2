@@ -27,7 +27,6 @@ class Music(PluginBase):
 
     @on_text_message(priority=82)
     async def handle_text(self, bot: WechatAPIClient, message: dict):
-        logger.info("aaaaaaaaaaaaa")
         if not self.enable:
             return
 

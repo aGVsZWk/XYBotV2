@@ -38,9 +38,9 @@ class DouyinParser(PluginBase):
                 config = tomllib.load(f)
                 
             # 基础配置
-            basic_config = config.get("basic", {})
+            basic_config = config.get("DouyinParser", {})
             self.enable = basic_config.get("enable", True)
-            self.http_proxy = basic_config.get("http_proxy", None)
+            self.http_proxy = basic_config.get("http-proxy", None)
             
         except Exception as e:
             logger.error(f"加载抖音解析器配置文件失败: {str(e)}")

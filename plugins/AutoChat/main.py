@@ -32,7 +32,7 @@ def predict_next_chat(messages, predict_user=""):
     # 读取数据
     df = pd.DataFrame(json.loads(messages))
 
-    df['create_time'] = pd.to_datetime(df['create_time'], unit='s')
+    df['create_time'] = pd.to_datetime(df.create_time, unit='s', utc=True).dt.tz_convert("Asia/Shanghai")
     if not predict_user:
         # 筛选 UserA 的聊天记录
         order = df["sender_wxid"].value_counts().sort_index()
@@ -98,11 +98,11 @@ def predict_next_chat(messages, predict_user=""):
         next_timestamp = next_hour.replace(minute=int(likely_minute), second=0)
         # 转换为 Unix 时间戳
         unix_timestamp = int(next_timestamp.timestamp())
-        logger.info(f"预测下次聊天时间-8小时: {next_timestamp} (Unix: {unix_timestamp + 8 * 3600})")
+        logger.info(f"预测下次聊天时间-8小时: {next_timestamp} (Unix: {unix_timestamp})")
     else:
         logger.info("预测无下次聊天")
         return -1
-    return unix_timestamp + 8 * 3600
+    return unix_timestamp
 
 
 class AutoChat(PluginBase):
@@ -230,11 +230,11 @@ class AutoChat(PluginBase):
         if send_wxid == "":
             recent_chat_time = messages[0]["create_time"]
             recent_sender_wxid = messages[0]["sender_wxid"]
-            return recent_sender_wxid, recent_chat_time + 8 * 3600
+            return recent_sender_wxid, recent_chat_time
         else:
             user_messages = list(filter(lambda x: x["sender_wxid"] == send_wxid, messages))
             if len(user_messages) > 0:
-                return messages[0]["sender_wxid"], messages[0]["create_time"] + 8 * 3600
+                return messages[0]["sender_wxid"], messages[0]["create_time"]
             else:
                 return "", 0
 
@@ -293,7 +293,7 @@ class AutoChat(PluginBase):
             return False
         return True
 
-    @schedule('interval', seconds=5)
+    @schedule('interval', seconds=30)
     async def auto_chat(self, bot: WechatAPIClient):
         if self.run_flag is False:
             self.run_flag = True

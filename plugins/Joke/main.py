@@ -42,7 +42,6 @@ class JokePlugin(PluginBase):
     async def async_init(self):
         return
 
-
     def get_joke(self):
         no = random.randint(0, 66028)
         curdir = os.path.dirname(__file__)
@@ -50,21 +49,18 @@ class JokePlugin(PluginBase):
         data_path = os.path.join(curdir, f)
         data = linecache.getline(data_path, no)
         data = json.loads(data)
-        output = "嘿嘿，宝子，我给你找了个笑话，专治无聊、不开心：\n" + "-----小可爱-----\n" + data["content"]
+        output = data["title"] + ": " + data["content"]
         return output
 
     @on_text_message(priority=81)
     async def handle_pat(self, bot: WechatAPIClient, message: dict):
-        logger.info("收到了笑话消息")
         if not self.enable:
             return
 
         content = str(message["Content"]).strip()
         command = content.split(" ")
-        logger.info("command:{}, self.command:{}".format(command, self.command))
         if command[0] in self.command:
             reply_msg = self.get_joke()
-            logger.info("reply_msg:{}".format(reply_msg))
             if message["IsGroup"] is True:
                 await bot.send_at_message(message["FromWxid"], reply_msg, [message["SenderWxid"]])
             else:

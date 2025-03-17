@@ -127,6 +127,24 @@ class MessageMixin(WechatAPIClientBase):
         except sqlite3.Error as e:
             logger.exception(f"保存消息到表 {table_name} 失败: {e}")
 
+    def create_table_if_not_exists(self, chat_id: str):
+        """为每个chat_id创建一个单独的表"""
+        table_name = self.get_table_name(chat_id)
+        cursor = self.db_connection.cursor()
+        try:
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS "{table_name}" (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sender_wxid TEXT NOT NULL,
+                    create_time INTEGER NOT NULL,  -- 使用 INTEGER 存储时间戳
+                    content TEXT NOT NULL
+                )
+            """)
+            self.db_connection.commit()
+            logger.info(f"表 {table_name} 创建成功")
+        except sqlite3.Error as e:
+             logger.error(f"创建表 {table_name} 失败：{e}")
+
     async def send_text_message(self, wxid: str, content: str, at: Union[list, str] = "") -> tuple[int, int, int]:
         """发送文本消息。
 
@@ -170,6 +188,7 @@ class MessageMixin(WechatAPIClientBase):
             if json_resp.get("Success"):
                 logger.info("发送文字消息: 对方wxid:{} at:{} 内容:{}", wxid, at, content)
                 data = json_resp.get("Data")
+                self.create_table_if_not_exists(wxid)
                 self.save_message_to_db(wxid, "wxid_t8p67vpimx0d22", data.get("List")[0].get("Createtime"), content)
                 return data.get("List")[0].get("ClientMsgid"), data.get("List")[0].get("Createtime"), data.get("List")[
                     0].get("NewMsgId")
