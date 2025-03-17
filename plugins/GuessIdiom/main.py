@@ -149,7 +149,7 @@ class GuessIdiom(PluginBase):
         """获取用户昵称，如果不存在则返回用户ID"""
         return message.get("SenderNickname", message.get("SenderWxid", "用户"))
 
-    @on_text_message(priority=60)
+    @on_text_message(priority=0)
     async def handle_text(self, bot: WechatAPIClient, message: dict):
         if not self.enable:
             logger.debug("插件未启用，跳过处理")
