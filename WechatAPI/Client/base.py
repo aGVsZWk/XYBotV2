@@ -79,6 +79,7 @@ class WechatAPIClientBase:
         """
         code = json_resp.get("Code")
         if code == -1:  # 参数错误
+            print(json_resp)
             raise ValueError(json_resp.get("Message"))
         elif code == -2:  # 其他错误
             raise Exception(json_resp.get("Message"))

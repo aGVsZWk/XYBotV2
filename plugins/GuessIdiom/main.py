@@ -253,6 +253,10 @@ class GuessIdiom(PluginBase):
             await self.check_answer(bot, message, chat_id, user_wxid, guess)
             return False
 
+        if chat_id not in self.game_sessions:
+            # await bot.send_text_message(chat_id, XYBOT_PREFIX + GAME_TIP)
+            return False
+
         answer = self.game_sessions[chat_id].get("answer")
         if answer in content:
             current_level = self.game_sessions[chat_id].get("current_level", 1)

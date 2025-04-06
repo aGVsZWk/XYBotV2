@@ -47,10 +47,12 @@ class LoginMixin(WechatAPIClientBase):
                 json_param['ProxyInfo'] = {'ProxyIp': f'{proxy.ip}:{proxy.port}',
                                            'ProxyPassword': proxy.password,
                                            'ProxyUser': proxy.username}
-
+            print(json_param)
+            print(self.ip)
+            print(self.port)
             response = await session.post(f'http://{self.ip}:{self.port}/GetQRCode', json=json_param)
             json_resp = await response.json()
-
+            print(json_resp)
             if json_resp.get("Success"):
 
                 if print_qr:
@@ -82,6 +84,7 @@ class LoginMixin(WechatAPIClientBase):
             根据error_handler处理错误
         """
         async with aiohttp.ClientSession() as session:
+            print("check login", uuid)
             json_param = {"Uuid": uuid}
             response = await session.post(f'http://{self.ip}:{self.port}/CheckUuid', json=json_param)
             json_resp = await response.json()
@@ -171,6 +174,7 @@ class LoginMixin(WechatAPIClientBase):
 
         async with aiohttp.ClientSession() as session:
             json_param = {"Wxid": wxid}
+            print(wxid)
             response = await session.post(f'http://{self.ip}:{self.port}/GetCachedInfo', json=json_param)
             json_resp = await response.json()
 

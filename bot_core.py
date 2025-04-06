@@ -96,7 +96,9 @@ async def bot_core():
                         device_name = bot.create_device_name()
                     if not device_id:
                         device_id = bot.create_device_id()
+                    print("dddddddddddd", device_id, device_name)
                     uuid, url = await bot.get_qr_code(device_id=device_id, device_name=device_name, print_qr=True)
+                    logger.success("get rq code success")
                     logger.success("获取到登录uuid: {}", uuid)
                     logger.success("获取到登录二维码: {}", url)
             except:
@@ -106,6 +108,7 @@ async def bot_core():
                 if not device_id:
                     device_id = bot.create_device_id()
                 uuid, url = await bot.get_qr_code(device_id=device_id, device_name=device_name, print_qr=True)
+                print("888888888", uuid, url)
                 logger.success("获取到登录uuid: {}", uuid)
                 logger.success("获取到登录二维码: {}", url)
 

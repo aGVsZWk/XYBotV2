@@ -330,10 +330,11 @@ class Dify(PluginBase):
         pattern = r'\[[^\]]+\]\([^\s\)]+\)'
         text = re.sub(pattern, '', text)
         if text:
-            if "@" in text:
+            if "@" in text or not message["IsGroup"]:
                 text = text.replace(" ", "\u2005")
                 await asyncio.sleep(random.random() * 5)
                 await bot.send_text_message(message["FromWxid"], text)
+                return
             else:
                 try:
                     text = json.loads(text)

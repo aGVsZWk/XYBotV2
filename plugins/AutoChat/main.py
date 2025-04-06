@@ -38,7 +38,8 @@ def predict_next_chat(messages, predict_user=""):
         order = df["sender_wxid"].value_counts().sort_index()
         # predict_user = 'wxid_acs3cg99vu1921'
         if len(order.index) >= 1:
-            predict_user = order.index[1]
+            # predict_user = order.index[1]
+            predict_user = ""
         else:
             predict_user = order.index[0]
 
@@ -105,7 +106,7 @@ def predict_next_chat(messages, predict_user=""):
     else:
         logger.info("预测无下次聊天")
         return -1
-    return unix_timestamp
+    return unix_timestamp + random.randint(12*3600, 24*3600)
 
 
 class AutoChat(PluginBase):
