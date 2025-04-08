@@ -12,7 +12,18 @@ from WechatAPI import WechatAPIClient
 from database.database import BotDatabase
 from utils.decorators import *
 from utils.plugin_base import PluginBase
+import re
 
+
+def handle_sentences(text):
+    # 使用正则表达式匹配句子边界（中文句号和问号），保留分割符号
+    sentences = re.findall(r'.*?[。！]', text)
+    # 处理最后一个句子可能没有结束符号的情况
+    last_part = text[len(''.join(sentences)):]
+    if last_part:
+        sentences.append(last_part)
+    ret = [s.strip() for s in sentences if s.strip()]
+    return ret
 
 
 class Dify(PluginBase):
@@ -250,6 +261,7 @@ class Dify(PluginBase):
                         elif line.startswith("data: "):  # 脑瘫吧，为什么前面要加 "data: " ？？？
                             line = line[6:]
                         try:
+                            print(line)
                             resp_json = json.loads(line)
                         except json.decoder.JSONDecodeError:
                             logger.error(f"Dify返回的JSON解析错误，请检查格式: {line}")
@@ -261,10 +273,8 @@ class Dify(PluginBase):
                             ai_resp = resp_json("answer", "")
                         elif event == "message_file":  # 文件事件 目前dify只输出图片
                             await self.dify_handle_image(bot, message, resp_json.get("url", ""))
-                            return
                         elif event == "tts_message":  # TTS 音频流结束事件
                             await self.dify_handle_audio(bot, message, resp_json.get("audio", ""))
-                            return
                         elif event == "error":  # 流式输出过程中出现的异常
                             await self.dify_handle_error(bot, message,
                                                          resp_json.get("task_id", ""),
@@ -272,7 +282,6 @@ class Dify(PluginBase):
                                                          resp_json.get("status", ""),
                                                          resp_json.get("code", ""),
                                                          resp_json.get("message", ""))
-                            return
                     new_con_id = resp_json.get("conversation_id", "")
                     if new_con_id and new_con_id != conversation_id:
                         self.db.save_llm_thread_id(message["FromWxid"], new_con_id, "dify")
@@ -331,9 +340,10 @@ class Dify(PluginBase):
         text = re.sub(pattern, '', text)
         if text:
             if "@" in text or not message["IsGroup"]:
-                text = text.replace(" ", "\u2005")
-                await asyncio.sleep(random.random() * 5)
-                await bot.send_text_message(message["FromWxid"], text)
+                for _text in handle_sentences(text):
+                    _text = _text.replace(" ", "\u2005")
+                    await asyncio.sleep(random.random() * 5)
+                    await bot.send_text_message(message["FromWxid"], _text)
                 return
             else:
                 try:
