@@ -1521,9 +1521,24 @@ class Dify2(PluginBase):
 
     async def text_to_voice_message(self, bot: WechatAPIClient, message: dict, text: str):
         try:
-            url = self.text_to_audio_url if self.text_to_audio_url else f"{self.current_model.base_url}/text-to-audio"
-            headers = {"Authorization": f"Bearer {self.current_model.api_key}", "Content-Type": "application/json"}
-            data = {"text": text, "user": message["SenderWxid"]}
+            # url = self.text_to_audio_url if self.text_to_audio_url else f"{self.current_model.base_url}/text-to-audio"
+            # headers = {"Authorization": f"Bearer {self.current_model.api_key}", "Content-Type": "application/json"}
+            # data = {"text": text, "user": message["SenderWxid"]}
+            url = "https://api.siliconflow.cn/v1/audio/speech"
+            data = {
+                "model": "FunAudioLLM/CosyVoice2-0.5B",
+                "input": text,
+                "voice": "FunAudioLLM/CosyVoice2-0.5B:anna",
+                "response_format": "wav",
+                "sample_rate": 16000,
+                "stream": True,
+                "speed": 1,
+                "gain": 0
+            }
+            headers = {
+                "Authorization": "Bearer sk-nuquonnskijxjttcuubbnqfoohieknygtthpsstwrzzuqdqn",
+                "Content-Type": "application/json"
+            }
             async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
                 async with session.post(url, headers=headers, json=data) as resp:
                     if resp.status == 200:

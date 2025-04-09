@@ -7,7 +7,7 @@ payload = {
     "input": "Can you say it with a happy emotion? <|endofprompt|>I'm so happy, Spring Festival is coming!",
     "voice": "FunAudioLLM/CosyVoice2-0.5B:anna",
     "response_format": "wav",
-    "sample_rate": 32000,
+    "sample_rate": 16000,
     "stream": True,
     "speed": 1,
     "gain": 0
