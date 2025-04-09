@@ -23,7 +23,6 @@ from WechatAPI import WechatAPIClient
 from database.XYBotDB import XYBotDB
 from utils.decorators import *
 from utils.plugin_base import PluginBase
-from gtts import gTTS
 import traceback
 import shutil
 from PIL import Image
