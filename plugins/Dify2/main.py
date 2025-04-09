@@ -1531,7 +1531,7 @@ class Dify2(PluginBase):
                 "voice": "FunAudioLLM/CosyVoice2-0.5B:anna",
                 "response_format": "wav",
                 "sample_rate": 16000,
-                "stream": True,
+                "stream": False,
                 "speed": 1,
                 "gain": 0
             }
