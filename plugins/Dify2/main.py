@@ -1278,14 +1278,14 @@ class Dify2(PluginBase):
             logger.error(f"Dify API 调用失败: {e}")
             await self.hendle_exceptions(bot, message, model_config=model)
 
-    async def download_file(self, url: str) -> tuple[bytes, str]:
+    async def download_file(self, url: str) -> bytes:
         """
         下载文件并返回文件内容和MIME类型
         """
         async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
             async with session.get(url) as resp:
                 content_type = resp.headers.get('Content-Type', '')
-                return await resp.read(), content_type
+                return await resp.read()
 
     async def upload_file_to_dify(self, file_content: bytes, mime_type: str, user: str, model_config=None) -> Optional[str]:
         """上传文件到Dify并返回文件ID，兼容旧代码用的包装函数"""
@@ -1543,7 +1543,7 @@ class Dify2(PluginBase):
                 async with session.post(url, headers=headers, json=data) as resp:
                     if resp.status == 200:
                         audio = await resp.read()
-                        await bot.send_voice_message(message["FromWxid"], voice=audio, format="mp3")
+                        await bot.send_voice_message(message["FromWxid"], voice=audio, format="wav")
                     else:
                         logger.error(f"text-to-audio 接口调用失败: {resp.status} - {await resp.text()}")
                         await bot.send_text_message(message["FromWxid"], TEXT_TO_VOICE_FAILED)
