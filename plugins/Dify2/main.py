@@ -20,7 +20,7 @@ from loguru import logger
 import speech_recognition as sr
 import os
 from WechatAPI import WechatAPIClient
-from database.XYBotDB import XYBotDB
+from database.database import BotDatabase as XYBotDB
 from utils.decorators import *
 from utils.plugin_base import PluginBase
 import traceback
