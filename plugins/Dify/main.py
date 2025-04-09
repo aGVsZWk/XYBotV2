@@ -1,8 +1,9 @@
-import asyncio
 import json
-import re
+import mimetypes
+import os
 import tomllib
 import traceback
+import urllib
 
 import aiohttp
 import filetype
@@ -24,6 +25,20 @@ def handle_sentences(text):
         sentences.append(last_part)
     ret = [s.strip() for s in sentences if s.strip()]
     return ret
+
+
+def clean_response(content):
+    content = re.sub(r'\[.*?\]', '', content, flags=re.DOTALL)
+    # 去除Markdown加粗和倾斜标记
+    content = re.sub(r'\*\*\*', '', content)
+    content = re.sub(r'\*\*', '', content)
+    content = re.sub(r'\*', '', content)
+    # 去除行首的#和-
+    content = re.sub(r'^\t*[#-]+', '', content, flags=re.MULTILINE)
+
+    content = re.sub(r'\n+', '\n', content)
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+    return content.strip()
 
 
 class Dify(PluginBase):
@@ -82,7 +97,7 @@ class Dify(PluginBase):
         elif len(command) == 1 and command[0] in self.commands:  # 只是指令，但没请求内容
             await bot.send_at_message(message["FromWxid"], "\n" + self.command_tip, [message["SenderWxid"]])
             return
-        
+
         elif command and command[0] in self.other_plugin_cmd:  # 指令来自其他插件
             return
 
@@ -135,7 +150,6 @@ class Dify(PluginBase):
 
         if await self._check_point(bot, message):
             upload_file_id = await self.upload_file(message["FromWxid"], message["Content"])
-
             files = [
                 {
                     "type": "audio",
@@ -143,9 +157,8 @@ class Dify(PluginBase):
                     "upload_file_id": upload_file_id
                 }
             ]
-
+            logger.info("upload voice file finish")
             await self.dify(bot, message, " \n", files)
-
         return False
 
     @on_image_message(priority=20)
@@ -304,76 +317,172 @@ class Dify(PluginBase):
 
     async def upload_file(self, user: str, file: bytes):
         headers = {"Authorization": f"Bearer {self.api_key}"}
-
         # user multipart/form-data
         kind = filetype.guess(file)
         formdata = aiohttp.FormData()
         formdata.add_field("user", user)
         formdata.add_field("file", file, filename=kind.extension, content_type=kind.mime)
-
         url = f"{self.base_url}/files/upload"
-
         async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
             async with session.post(url, headers=headers, data=formdata) as resp:
                 resp_json = await resp.json()
-
         return resp_json.get("id", "")
 
+    async def download_file(self, url: str) -> tuple[bytes, str]:
+        async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
+            async with session.get(url) as resp:
+                content_type = resp.headers.get('Content-Type', '')
+                return await resp.read(), content_type
+
     async def dify_handle_text(self, bot: WechatAPIClient, message: dict, text: str):
+        # 匹配Dify返回的图片引用格式
+        image_pattern = r'\[(.*?)\]\((.*?)\)'
+        matches = re.findall(image_pattern, text)
+        # 移除所有图片引用文本
+        text = re.sub(image_pattern, '', text)
+
+        # if text:
+        #     if "@" in text or not message["IsGroup"]:
+        #         for _text in handle_sentences(text):
+        #             _text = _text.replace(" ", "\u2005")
+        #             await asyncio.sleep(random.random() * 5)
+        #             await bot.send_text_message(message["FromWxid"], _text)
+        #         return
+        #     else:
+        #         try:
+        #             text = json.loads(text)
+        #             test_data = {
+        #                 'video': text["url"],
+        #                 'title': text["desc"],
+        #                 'name': text["nickname"],
+        #                 'cover': 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/7c/49/e1/7c49e1af-ce92-d1c4-9a93-0a316e47ba94/AppIcon_TikTok-0-0-1x_U007epad-0-1-0-0-85-220.png/512x512bb.jpg'
+        #             }
+        #             logger.info("开始发送测试卡片")
+        #             logger.debug(f"测试数据: {test_data}")
+        #             # 发送测试卡片
+        #             await bot.send_link_message(
+        #                 wxid=message["FromWxid"],
+        #                 url=test_data['video'],
+        #                 title=f"{test_data['title'][:30]} - {test_data['name'][:10]}",
+        #                 description=text["desc"],
+        #                 thumb_url=test_data['cover']
+        #             )
+        #         except:
+        #             text = text
+        #             await asyncio.sleep(random.random() * 5)
+        #             await bot.send_at_message(message["FromWxid"], text, [message["SenderWxid"]])
+        # 先发送文字内容
+        if text:
+            paragraphs = text.split("//n")
+            for paragraph in paragraphs:
+                if paragraph.strip():
+                    await bot.send_text_message(message["FromWxid"], paragraph.strip())
+            # if message["MsgType"] == 34 or self.voice_reply_all:
+            #     await self.text_to_voice_message(bot, message, text)
+            # else:
+            #     paragraphs = text.split("//n")
+            #     for paragraph in paragraphs:
+            #         if paragraph.strip():
+            #             await bot.send_text_message(message["FromWxid"], paragraph.strip())
+        # 如果有图片引用，只处理最后一个
+        if matches:
+            filename, url = matches[-1]  # 只取最后一个图片
+            try:
+                # 如果URL是相对路径,添加base_url
+                if url.startswith('/files') and ".mp3" not in url:
+                    # 移除base_url中可能的v1路径
+                    base_url = self.base_url.replace('/v1', '')
+                    url = f"{base_url}{url}"
+                    logger.debug(f"处理图片链接: {url}")
+                    headers = {"Authorization": f"Bearer {self.api_key}"}
+                    async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
+                        async with session.get(url, headers=headers) as resp:
+                            if resp.status == 200:
+                                image_data = await resp.read()
+                                await bot.send_image_message(message["FromWxid"], image_data)
+                            else:
+                                logger.error(f"下载图片失败: HTTP {resp.status}")
+                                await bot.send_text_message(message["FromWxid"], f"下载图片失败: HTTP {resp.status}")
+            except Exception as e:
+                logger.error(f"处理图片 {url} 失败: {e}")
+                await bot.send_text_message(message["FromWxid"], f"处理图片失败: {str(e)}")
+
         # pattern = r"\]\((https?:\/\/[^\s\)]+)\)"
         pattern = r"\]\(([^\s\)]+)\)"
         links = re.findall(pattern, text)
         for _url in links:
             url = self.base_resource_path + _url
             logger.info(url)
-            file = await self.download_file(url)
+            file, content_type = await self.download_file(url)
             extension = filetype.guess_extension(file)
             if extension in ('wav', 'mp3'):
-                await bot.send_voice_message(message["FromWxid"], voice=file, format=filetype.guess_extension(file))
+                await bot.send_voice_message(message["FromWxid"], voice=file, format=extension)
             elif extension in ('jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'):
                 await bot.send_image_message(message["FromWxid"], file)
             elif extension in ('mp4', 'avi', 'mov', 'mkv', 'flv'):
                 await bot.send_video_message(message["FromWxid"], video=file, image="None")
 
+        # 识别普通文件链接
+        file_pattern = r'\.(?:pdf|doc|docx|xls|xlsx|txt|zip|rar|7z|tar|gz)'
+        file_links = re.findall(file_pattern, text)
+        for _url in file_links:
+            url = self.base_resource_path + _url
+            await self.download_and_send_file(bot, message, url)
+
+
         # pattern = r'\[[^\]]+\]\(https?:\/\/[^\s\)]+\)'
         pattern = r'\[[^\]]+\]\([^\s\)]+\)'
         text = re.sub(pattern, '', text)
-        if text:
-            if "@" in text or not message["IsGroup"]:
-                for _text in handle_sentences(text):
-                    _text = _text.replace(" ", "\u2005")
-                    await asyncio.sleep(random.random() * 5)
-                    await bot.send_text_message(message["FromWxid"], _text)
-                return
-            else:
-                try:
-                    text = json.loads(text)
-                    test_data = {
-                        'video': text["url"],
-                        'title': text["desc"],
-                        'name': text["nickname"],
-                        'cover': 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/7c/49/e1/7c49e1af-ce92-d1c4-9a93-0a316e47ba94/AppIcon_TikTok-0-0-1x_U007epad-0-1-0-0-85-220.png/512x512bb.jpg'
-                    }
-                    logger.info("开始发送测试卡片")
-                    logger.debug(f"测试数据: {test_data}")
-                    # 发送测试卡片
-                    await bot.send_link_message(
-                        wxid=message["FromWxid"],
-                        url=test_data['video'],
-                        title=f"{test_data['title'][:30]} - {test_data['name'][:10]}",
-                        description=text["desc"],
-                        thumb_url=test_data['cover']
-                    )
-                except:
-                    text = text
-                    await asyncio.sleep(random.random() * 5)
-                    await bot.send_at_message(message["FromWxid"], text, [message["SenderWxid"]])
 
+    async def download_and_send_file(self, bot: WechatAPIClient, message: dict, url: str):
+        """下载并发送文件"""
+        try:
+            # 从URL中获取文件名
+            parsed_url = urllib.parse.urlparse(url)
+            filename = os.path.basename(parsed_url.path)
+            if not filename:
+                filename = "downloaded_file"
 
-    async def download_file(self, url: str) -> bytes:
-        async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
-            async with session.get(url) as resp:
-                return await resp.read()
+            logger.debug(f"开始下载文件: {url}")
+            async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        await bot.send_text_message(message["FromWxid"], f"下载文件失败: HTTP {resp.status}")
+                        return
+                    content = await resp.read()
+                    # 检测文件类型
+                    kind = filetype.guess(content)
+                    if kind is None:
+                        # 如果无法检测文件类型,尝试从Content-Type或URL获取
+                        content_type = resp.headers.get('Content-Type', '')
+                        ext = mimetypes.guess_extension(content_type) or os.path.splitext(filename)[1]
+                        if not ext:
+                            await bot.send_text_message(message["FromWxid"], f"无法识别文件类型: {filename}")
+                            return
+                    else:
+                        ext = f".{kind.extension}"
+
+                    # 确保文件名有扩展名
+                    if not os.path.splitext(filename)[1]:
+                        filename = f"{filename}{ext}"
+
+                    # 根据文件类型发送不同类型的消息
+                    if ext.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                        await bot.send_image_message(message["FromWxid"], content)
+                    elif ext.lower() in ['.mp3', '.wav', '.ogg', 'm4a']:
+                        await bot.send_voice_message(message["FromWxid"], voice=content, format=ext[1:])
+                    elif ext.lower() in ['.mp4', '.avi', '.mov', '.mkv']:
+                        await bot.send_video_message(message["FromWxid"], video=content, image="None")
+                    else:
+                        # 其他类型文件，发送文件内容
+                        await bot.send_text_message(message["FromWxid"],
+                                                    f"文件名: {filename}\n内容长度: {len(content)} 字节")
+
+                    logger.debug(f"文件 {filename} 发送成功")
+
+        except Exception as e:
+            logger.error(f"下载或发送文件失败: {e}")
+            await bot.send_text_message(message["FromWxid"], f"处理文件失败: {str(e)}")
 
     async def dify_handle_image(self, bot: WechatAPIClient, message: dict, image: Union[str, bytes]):
         if isinstance(image, str) and image.startswith("http"):

@@ -11,7 +11,7 @@ headers = {
     "Content-Type": "application/json"
 }
 
-url = "http://192.168.1.14/v1/chat-messages"
+url = "http://raspberrypi.local/v1/chat-messages"
 
 
 def chat():
@@ -32,9 +32,9 @@ def chat():
 
 
 def delete():
-    url = "http://192.168.1.14/v1/conversations/2961f28d-4bd1-4a0f-b004-b77ad6bf1663"
+    url = "http://raspberrypi.local/v1/conversations/ffcfa3ba-68d9-4c5e-8f95-6fe8add35cc6"
     data = {
-        "user": "52611924931@chatroom"
+        "user": "wxid_acs3cg99vu1921"
     }
 
     resp = requests.delete(url, headers=headers, data=json.dumps(data), stream=True)

@@ -1,5 +1,5 @@
 [Dify]
-enable = true
+enable = false
 keai-api-key = "app-CvUVH3JbuDwILMtZqPEKl6MV" # Dify的API Key
 y3i3-api-key = "app-jW0NZZn1pDiZDJilOxQFxICY"
 zorg-api-key = "app-CvUVH3JbuDwILMtZqPEKl6MV" # Dify的API Key
