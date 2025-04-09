@@ -17,7 +17,7 @@ command-tip = """-----XYBot-----
 admin_ignore = true            # 管理员是否免积分，设为true则管理员不消耗积分使用AI
 whitelist_ignore = true        # 白名单用户是否免积分，设为true则白名单用户不消耗积分
 http-proxy = ""                # HTTP代理配置，格式为"http://代理地址:端口"，不需要则留空
-voice_reply_all = false        # 是否总是使用语音回复，设为true则所有回复都转为语音消息
+voice-reply-length = 50        # 是否总是使用语音回复，设为true则所有回复都转为语音消
 
 robot-names = ["Y3I3", "ZORG", "小可爱"]
 

@@ -607,8 +607,8 @@ class Dify2(PluginBase):
             self.admin_ignore = plugin_config.get("admin_ignore", True)
             self.whitelist_ignore = plugin_config.get("whitelist_ignore", True)
             self.http_proxy = plugin_config.get("http-proxy", "")
-            self.voice_reply_all = plugin_config.get("voice_reply_all", False)
             self.robot_names = plugin_config.get("robot-names", [])
+            self.voice_reply_length = plugin_config.get("voice-reply-length", 100)
             self.audio_to_text_url = plugin_config.get("audio-to-text-url", "")
             self.text_to_audio_url = plugin_config.get("text-to-audio-url", "")
             self.remember_user_model = plugin_config.get("remember_user_model", True)
@@ -1334,7 +1334,7 @@ class Dify2(PluginBase):
         
         # 先发送文字内容
         if text:
-            if message["MsgType"] == 34 or self.voice_reply_all:
+            if message["MsgType"] == 34 or len(text) >= self.voice_reply_length:
                 await self.text_to_voice_message(bot, message, text)
             else:
                 paragraphs = text.split("//n")
