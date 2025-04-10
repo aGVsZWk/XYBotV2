@@ -219,3 +219,5 @@ WechatAPI/Client/login_stat.json
 .db
 plugins/resources/
 /WechatAPI/core/XYWechatPad
+
+*.DS_Store

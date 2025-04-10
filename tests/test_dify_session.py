@@ -32,9 +32,9 @@ def chat():
 
 
 def delete():
-    url = "http://raspberrypi.local/v1/conversations/ffcfa3ba-68d9-4c5e-8f95-6fe8add35cc6"
+    url = "http://raspberrypi.local/v1/conversations/fdff9914-8b13-4f98-ada5-4ba9355f59d5"
     data = {
-        "user": "wxid_acs3cg99vu1921"
+        "user": "wxid_y8cnblbc15gc22"
     }
 
     resp = requests.delete(url, headers=headers, data=json.dumps(data), stream=True)
