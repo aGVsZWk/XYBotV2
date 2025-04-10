@@ -1815,13 +1815,14 @@ class Dify2(PluginBase):
                         audio = await resp.read()
                         tf.write(audio)
                         silk_voice = convert_to_silk(str(tf.name))
-                        await bot.send_voice_message(message["FromWxid"], voice=silk_voice, format="amr")
+                        await bot.send_voice_message(message["FromWxid"], voice=audio, format="wav")
                     else:
                         logger.error(f"text-to-audio 接口调用失败: {resp.status} - {await resp.text()}")
                         await bot.send_text_message(message["FromWxid"], TEXT_TO_VOICE_FAILED)
             tf.close()
         except Exception as e:
             logger.error(f"text-to-audio 接口调用异常: {e}")
+            traceback.print_exc()
             await bot.send_text_message(message["FromWxid"], f"{TEXT_TO_VOICE_FAILED}: {str(e)}")
 
     @on_image_message(priority=20)
