@@ -15,9 +15,9 @@ redis-db = 0               # Redis数据库编号，默认0
 # XYBot 核心设置
 [XYBot]
 version = "v1.0.0"                    # 版本号，请勿修改
-ignore-protection = false             # 是否忽略风控保护机制，建议保持false
+ignore-protection = true             # 是否忽略风控保护机制，建议保持false
 database-url = "sqlite:///xybot.db"   # SQLite数据库地址，一般无需修改
-
+chat-history-file = "chat_history.db"  # 聊天记录数据库
 # 管理员设置
 admins = ["wxid_acs3cg99vu1921"]  # 管理员的wxid列表，可从消息日志中获取
 disabled-plugins = ["ExamplePlugin", "TencentLke"]   # 禁用的插件列表，不需要的插件名称填在这里

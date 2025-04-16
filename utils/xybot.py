@@ -1,11 +1,13 @@
+import datetime
 import tomllib
 import xml.etree.ElementTree as ET
 from typing import Dict, Any
 
 from loguru import logger
 
-from WechatAPI import WechatAPIClient
+from WechatAPI import WechatAPIClient, Section
 from WechatAPI.Client.protect import protector
+from database.database import ChatHistoryDatabase
 from utils.event_manager import EventManager
 
 
@@ -25,7 +27,7 @@ class XYBot:
         self.ignore_mode = main_config.get("XYBot", {}).get("ignore-mode", "")
         self.whitelist = main_config.get("XYBot", {}).get("whitelist", [])
         self.blacklist = main_config.get("XYBot", {}).get("blacklist", [])
-
+        self.chat_history = ChatHistoryDatabase()
 
     def update_profile(self, wxid: str, nickname: str, alias: str, phone: str):
         """更新机器人信息"""
@@ -78,7 +80,9 @@ class XYBot:
         elif msg_type == 51:
             pass
         elif msg_type == 47:
-            logger.info("收到的可能是表情信息")
+            # await self.process_image_message(message)
+            logger.info("收到的可能是表情信息: {}", message)
+            await self.process_emoji_message(message)
         else:
             logger.info("未知的消息类型: {}", message)
 
@@ -125,7 +129,8 @@ class XYBot:
                         message["SenderWxid"],
                         message["Ats"],
                         message["Content"])
-
+            self.chat_history.save_message_to_db(message["FromWxid"], message["SenderWxid"], message["CreateTime"],
+                                                 message["Content"])
             if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
                 if self.ignore_protection or not protector.check(14400):
                     await EventManager.emit("at_message", self.bot, message)
@@ -139,7 +144,8 @@ class XYBot:
                     message["SenderWxid"],
                     message["Ats"],
                     message["Content"])
-
+        self.chat_history.save_message_to_db(message["FromWxid"], message["SenderWxid"], message["CreateTime"],
+                                             message["Content"])
         if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
             if self.ignore_protection or not protector.check(14400):
                 await EventManager.emit("text_message", self.bot, message)
@@ -193,6 +199,59 @@ class XYBot:
                 await EventManager.emit("image_message", self.bot, message)
             else:
                 logger.warning("风控保护: 新设备登录后4小时内请挂机")
+
+    async def process_emoji_message(self, message: Dict[str, Any]):
+        """处理图片消息"""
+        # 预处理消息
+        message["Content"] = message.get("Content").get('string')
+
+        if message["FromWxid"].endswith("@chatroom"):  # 群聊消息
+            message["IsGroup"] = True
+            split_content = message["Content"].split(":", 1)
+            if len(split_content) > 1:
+                message["Content"] = split_content[1]
+                message["SenderWxid"] = split_content[0]
+            else:  # 绝对是自己发的消息! qwq
+                message["Content"] = split_content[0]
+                message["SenderWxid"] = self.wxid
+        else:
+            message["SenderWxid"] = message["FromWxid"]
+            if message["FromWxid"] == self.wxid:  # 自己发的消息
+                message["FromWxid"] = message["ToWxid"]
+            message["IsGroup"] = False
+
+        logger.info("收到表情消息: 消息ID:{} 来自:{} 发送人:{} XML:{}",
+                    message["MsgId"],
+                    message["FromWxid"],
+                    message["SenderWxid"],
+                    message["Content"])
+
+        # 解析图片消息
+        aeskey, cdnmidimgurl = None, None
+        try:
+            root = ET.fromstring(message["Content"])
+            img_element = root.find('emoji')
+            if img_element is not None:
+                aeskey = img_element.get('aeskey')
+                cdnmidimgurl = img_element.get('cdnurl')
+                length = img_element.get('len')
+                # cdnmidimgurl = img_element.get('cdnurl')
+        except Exception as e:
+            logger.error("解析表情消息失败: {}", e)
+            return
+
+        # 下载图片
+        if aeskey and cdnmidimgurl:
+            # message["Content"] = await self.bot.download_emoji(message["MsgId"], message["ToWxid"], {"dataLen": img_element.get("len"), "startPos": 0})
+
+            message["Content"] = await self.bot.download_emoji(message["MsgId"], message["ToWxid"])
+
+        if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
+            if self.ignore_protection or not protector.check(14400):
+                await EventManager.emit("image_message", self.bot, message)
+            else:
+                logger.warning("风控保护: 新设备登录后4小时内请挂机")
+
 
     async def process_voice_message(self, message: Dict[str, Any]):
         """处理语音消息"""

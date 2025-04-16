@@ -12,8 +12,10 @@ import sqlite3  # 导入 sqlite3 模块
 import os
 
 from WechatAPI import WechatAPIClient
+from database.database import ChatHistoryDatabase
 from utils.decorators import on_at_message, on_text_message
 from utils.plugin_base import PluginBase
+
 
 class ChatSummary(PluginBase):
     """
@@ -107,41 +109,7 @@ class ChatSummary(PluginBase):
         self.last_summary_time: Dict[str, datetime] = {}  # 记录上次总结的时间
         self.chat_history: Dict[str, List[Dict]] = defaultdict(list)  # 存储聊天记录
         self.http_session = aiohttp.ClientSession()
-
-        # 数据库配置
-        self.db_file = "chat_history.db"  # 数据库文件名
-        self.db_connection = None
-        self.initialize_database() #初始化数据库
-
-    def initialize_database(self):
-         """初始化数据库连接"""
-         self.db_connection = sqlite3.connect(self.db_file)
-         logger.info("数据库连接已建立")
-
-    def create_table_if_not_exists(self, chat_id: str):
-        """为每个chat_id创建一个单独的表"""
-        table_name = self.get_table_name(chat_id)
-        cursor = self.db_connection.cursor()
-        try:
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS "{table_name}" (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    sender_wxid TEXT NOT NULL,
-                    create_time INTEGER NOT NULL,  -- 使用 INTEGER 存储时间戳
-                    content TEXT NOT NULL
-                )
-            """)
-            self.db_connection.commit()
-            logger.info(f"表 {table_name} 创建成功")
-        except sqlite3.Error as e:
-             logger.error(f"创建表 {table_name} 失败：{e}")
-
-    def get_table_name(self, chat_id: str) -> str:
-        """
-        生成表名，将chat_id中的特殊字符替换掉，避免SQL注入和表名错误
-        """
-        return "chat_" + re.sub(r"[^a-zA-Z0-9_]", "_", chat_id)
-
+        self.chat_history = ChatHistoryDatabase()
 
     async def _summarize_chat(self, bot: WechatAPIClient, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None) -> None:
         """
@@ -163,7 +131,7 @@ class ChatSummary(PluginBase):
                 return # 理论上不应该发生
 
             # 从数据库中获取聊天记录
-            messages_to_summarize = self.get_messages_from_db(chat_id, limit, duration)
+            messages_to_summarize = self.chat_history.get_messages_from_db(chat_id, limit, duration)
 
             if not messages_to_summarize:
                 try:
@@ -311,17 +279,15 @@ class ChatSummary(PluginBase):
             return True # 插件未启用，允许其他插件处理
 
         chat_id = message["FromWxid"]
-        sender_wxid = message["SenderWxid"]
         content = message["Content"]
-        is_group = message["IsGroup"]
-        create_time = message["CreateTime"]
 
+        # sender_wxid = message["SenderWxid"]
+        # is_group = message["IsGroup"]
+        # create_time = message["CreateTime"]
         # 1.  创建表 (如果不存在)
-        self.create_table_if_not_exists(chat_id)
-
+        # self.create_table_if_not_exists(chat_id)
         # 2. 保存聊天记录到数据库
-        self.save_message_to_db(chat_id, sender_wxid, create_time, content)
-
+        # self.save_message_to_db(chat_id, sender_wxid, create_time, content)
         # 3. 记录聊天历史 (可选，如果你还需要在内存中保留一份)
         # self.chat_history[chat_id].append(message)
 
@@ -358,91 +324,6 @@ class ChatSummary(PluginBase):
             return False # 已创建总结任务，阻止其他插件处理
         return True # 不是总结命令，允许其他插件处理
 
-    def save_message_to_db(self, chat_id: str, sender_wxid: str, create_time: int, content: str):
-        """将消息保存到数据库"""
-        table_name = self.get_table_name(chat_id)
-        try:
-            cursor = self.db_connection.cursor()
-            cursor.execute(f"""
-                INSERT INTO "{table_name}" (sender_wxid, create_time, content)
-                VALUES (?, ?, ?)
-            """, (sender_wxid, create_time, content))
-            self.db_connection.commit()
-            logger.debug(f"消息保存到表 {table_name}: sender_wxid={sender_wxid}, create_time={create_time}")
-        except sqlite3.Error as e:
-            logger.exception(f"保存消息到表 {table_name} 失败: {e}")
-
-    def get_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None) -> List[Dict]:
-        """从数据库获取消息，同时支持按条数和按时间范围获取"""
-        table_name = self.get_table_name(chat_id)
-
-        try:
-            cursor = self.db_connection.cursor()
-            if duration:
-                cutoff_time = datetime.now() - duration
-                cutoff_timestamp = int(cutoff_time.timestamp())
-                cursor.execute(f"""
-                    SELECT sender_wxid, create_time, content
-                    FROM "{table_name}"
-                    WHERE create_time >= ?
-                    ORDER BY create_time DESC
-                """, (cutoff_timestamp,))
-
-            elif limit:
-                 cursor.execute(f"""
-                    SELECT sender_wxid, create_time, content
-                    FROM "{table_name}"
-                    ORDER BY create_time DESC
-                    LIMIT ?
-                """, (limit,))
-            else:
-                return [] #避免不传limit和duration的情况
-            rows = cursor.fetchall()
-            # 将结果转换为字典列表，方便后续使用
-            messages = []
-            for row in rows:
-                messages.append({
-                    'sender_wxid': row[0],
-                    'create_time': row[1],
-                    'content': row[2]
-                })
-            if duration:
-                logger.debug(f"从表 {table_name} 获取消息: duration={duration}, 数量={len(messages)}")
-            else:
-                logger.debug(f"从表 {table_name} 获取消息: limit={limit}, 数量={len(messages)}")
-            return messages
-        except sqlite3.Error as e:
-            logger.exception(f"从表 {table_name} 获取消息失败: {e}")
-            return []
-
-    async def clear_old_messages(self):
-        """定期清理旧消息"""
-        while True:
-            await asyncio.sleep(60 * 60 * 24)  # 每天检查一次
-            # try:
-            #     cutoff_time = datetime.now() - timedelta(days=3) # 3天前
-            #     cutoff_timestamp = int(cutoff_time.timestamp())
-
-            #     cursor = self.db_connection.cursor()
-
-            #     # 获取所有表名
-            #     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            #     tables = [row[0] for row in cursor.fetchall() if row[0].startswith("chat_")] #只清理chat_开头的表
-
-            #     for table in tables:
-            #         try:
-            #             cursor.execute(f"""
-            #                 DELETE FROM "{table}"
-            #                 WHERE create_time < ?
-            #             """, (cutoff_timestamp,))
-            #             self.db_connection.commit()
-            #             logger.info(f"已清理表 {table} 中 {cutoff_timestamp} 之前的旧消息")
-            #         except sqlite3.Error as e:
-            #             logger.exception(f"清理表 {table} 失败: {e}")
-
-            # except Exception as e:
-            #     logger.exception(f"清理旧消息失败: {e}")
-
     async def close(self):
         """插件关闭时，取消所有未完成的总结任务。"""
         logger.info("Closing ChatSummary plugin")
@@ -460,13 +341,8 @@ class ChatSummary(PluginBase):
             await self.http_session.close()
             logger.info("Aiohttp session closed")
 
-        # 关闭数据库连接
-        if self.db_connection:
-            self.db_connection.close()
-            logger.info("数据库连接已关闭")
-
         logger.info("ChatSummary plugin closed")
 
     async def start(self):
         """启动插件时启动清理旧消息的任务"""
-        asyncio.create_task(self.clear_old_messages()) #启动定时清理任务
+        asyncio.create_task(self.chat_history.clear_old_messages()) #启动定时清理任务

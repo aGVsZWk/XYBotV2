@@ -1,21 +1,13 @@
 import io
-import json
 import re
 import subprocess
 import tomllib
 from typing import Optional, Union, Dict, List, Tuple
-import time
-from dataclasses import dataclass, field
-from datetime import datetime
-import asyncio
-from collections import defaultdict
-from enum import Enum
 import urllib.parse
 import mimetypes
 import aiohttp
 import filetype
 from loguru import logger
-import speech_recognition as sr
 from WechatAPI import WechatAPIClient
 from database.database import BotDatabase as XYBotDB
 from utils.decorators import *
@@ -24,274 +16,17 @@ import traceback
 import shutil
 from PIL import Image
 import base64
-import hashlib
-import hmac
 import json
-import os
 import time
 import tempfile
-import requests
 import os
-import av
-import pilk
-
-
-# def to_pcm(in_path: str) -> tuple[str, int]:
-#     """任意媒体文件转 pcm"""
-#     out_path = os.path.splitext(in_path)[0] + '.pcm'
-#     with av.open(in_path) as in_container:
-#         in_stream = in_container.streams.audio[0]
-#         sample_rate = in_stream.codec_context.sample_rate
-#         if sample_rate not in [8000, 12000, 16000, 24000, 32000, 44100, 48000]:
-#             sample_rate = 24000
-#         with av.open(out_path, 'w', 's16le') as out_container:
-#             out_stream = out_container.add_stream(
-#                 'pcm_s16le',
-#                 rate=sample_rate,
-#                 layout='mono'
-#             )
-#             try:
-#                for frame in in_container.decode(in_stream):
-#                   frame.pts = None
-#                   for packet in out_stream.encode(frame):
-#                      out_container.mux(packet)
-#             except:
-#                pass
-#     return out_path, sample_rate
-
-
-# noinspection PyUnresolvedReferences
-def to_pcm(in_path: str) -> Tuple[str, int]:
-    """任意媒体文件转 PCM"""
-    out_path = os.path.splitext(in_path)[0] + ".pcm"
-    with av.open(in_path) as in_container:
-        in_stream = in_container.streams.audio[0]
-        sample_rate = in_stream.codec_context.sample_rate
-        if sample_rate not in [8000, 12000, 16000, 24000, 32000, 44100, 48000]:
-            sample_rate = 24000
-        with av.open(out_path, "w", "s16le") as out_container:
-            out_stream = out_container.add_stream(
-                "pcm_s16le", rate=sample_rate, layout="mono"
-            )
-            try:
-                for frame in in_container.decode(in_stream):
-                    frame.pts = None
-                    for packet in out_stream.encode(frame):
-                        out_container.mux(packet)
-            except Exception as e:
-                print("Warning", e.args)
-    return out_path, sample_rate
-
-
-def convert_to_silk(media_path: str) -> str:
-    """任意媒体文件转 silk, 返回silk路径"""
-    pcm_path, sample_rate = to_pcm(media_path)
-    silk_path = os.path.splitext(pcm_path)[0] + '.silk'
-    duration = pilk.encode(pcm_path, silk_path, pcm_rate=sample_rate, tencent=True)
-    # duration = pilk.encode(pcm_path, silk_path, pcm_rate=sample_rate, tencent=True)
-    print(duration)
-    os.remove(pcm_path)
-    return silk_path
-
-
-lfasr_host = 'http://raasr.xfyun.cn/api'
-
-# 请求的接口名
-api_prepare = '/prepare'
-api_upload = '/upload'
-api_merge = '/merge'
-api_get_progress = '/getProgress'
-api_get_result = '/getResult'
-# 文件分片大小10M
-file_piece_sice = 10485760
-
-# ——————————————————转写可配置参数————————————————
-# 参数可在官网界面（https://doc.xfyun.cn/rest_api/%E8%AF%AD%E9%9F%B3%E8%BD%AC%E5%86%99.html）查看，根据需求可自行在gene_params方法里添加修改
-# 转写类型
-lfasr_type = 0
-# 是否开启分词
-has_participle = 'false'
-has_seperate = 'true'
-# 多候选词个数
-max_alternatives = 0
-# 子用户标识
-suid = ''
-
-
-class SliceIdGenerator:
-    """slice id生成器"""
-
-    def __init__(self):
-        self.__ch = 'aaaaaaaaa`'
-
-    def getNextSliceId(self):
-        ch = self.__ch
-        j = len(ch) - 1
-        while j >= 0:
-            cj = ch[j]
-            if cj != 'z':
-                ch = ch[:j] + chr(ord(cj) + 1) + ch[j + 1:]
-                break
-            else:
-                ch = ch[:j] + 'a' + ch[j + 1:]
-                j = j - 1
-        self.__ch = ch
-        return self.__ch
-
-
-class RequestApi(object):
-    def __init__(self, appid, secret_key, upload_file_path):
-        self.appid = appid
-        self.secret_key = secret_key
-        self.upload_file_path = upload_file_path
-
-    # 根据不同的apiname生成不同的参数,本示例中未使用全部参数您可在官网(https://doc.xfyun.cn/rest_api/%E8%AF%AD%E9%9F%B3%E8%BD%AC%E5%86%99.html)查看后选择适合业务场景的进行更换
-    def gene_params(self, apiname, taskid=None, slice_id=None):
-        appid = self.appid
-        secret_key = self.secret_key
-        upload_file_path = self.upload_file_path
-        ts = str(int(time.time()))
-        m2 = hashlib.md5()
-        m2.update((appid + ts).encode('utf-8'))
-        md5 = m2.hexdigest()
-        md5 = bytes(md5, encoding='utf-8')
-        # 以secret_key为key, 上面的md5为msg， 使用hashlib.sha1加密结果为signa
-        signa = hmac.new(secret_key.encode('utf-8'), md5, hashlib.sha1).digest()
-        signa = base64.b64encode(signa)
-        signa = str(signa, 'utf-8')
-        file_len = os.path.getsize(upload_file_path)
-        file_name = os.path.basename(upload_file_path)
-        param_dict = {}
-
-        if apiname == api_prepare:
-            # slice_num是指分片数量，如果您使用的音频都是较短音频也可以不分片，直接将slice_num指定为1即可
-            slice_num = int(file_len / file_piece_sice) + (0 if (file_len % file_piece_sice == 0) else 1)
-            param_dict['app_id'] = appid
-            param_dict['signa'] = signa
-            param_dict['ts'] = ts
-            param_dict['file_len'] = str(file_len)
-            param_dict['file_name'] = file_name
-            param_dict['slice_num'] = str(slice_num)
-        elif apiname == api_upload:
-            param_dict['app_id'] = appid
-            param_dict['signa'] = signa
-            param_dict['ts'] = ts
-            param_dict['task_id'] = taskid
-            param_dict['slice_id'] = slice_id
-        elif apiname == api_merge:
-            param_dict['app_id'] = appid
-            param_dict['signa'] = signa
-            param_dict['ts'] = ts
-            param_dict['task_id'] = taskid
-            param_dict['file_name'] = file_name
-        elif apiname == api_get_progress or apiname == api_get_result:
-            param_dict['app_id'] = appid
-            param_dict['signa'] = signa
-            param_dict['ts'] = ts
-            param_dict['task_id'] = taskid
-        return param_dict
-
-    # 请求和结果解析，结果中各个字段的含义可参考：https://doc.xfyun.cn/rest_api/%E8%AF%AD%E9%9F%B3%E8%BD%AC%E5%86%99.html
-    def gene_request(self, apiname, data, files=None, headers=None):
-        response = requests.post(lfasr_host + apiname, data=data, files=files, headers=headers)
-        result = json.loads(response.text)
-        if result["ok"] == 0:
-            print("{} success:".format(apiname) + str(result))
-            return result
-        else:
-            print("{} error:".format(apiname) + str(result))
-            exit(0)
-            return result
-
-    # 预处理
-    def prepare_request(self):
-        return self.gene_request(apiname=api_prepare,
-                                 data=self.gene_params(api_prepare))
-
-    # 上传
-    def upload_request(self, taskid, upload_file_path):
-        file_object = open(upload_file_path, 'rb')
-        try:
-            index = 1
-            sig = SliceIdGenerator()
-            while True:
-                content = file_object.read(file_piece_sice)
-                if not content or len(content) == 0:
-                    break
-                files = {
-                    "filename": self.gene_params(api_upload).get("slice_id"),
-                    "content": content
-                }
-                response = self.gene_request(api_upload,
-                                             data=self.gene_params(api_upload, taskid=taskid,
-                                                                   slice_id=sig.getNextSliceId()),
-                                             files=files)
-                if response.get('ok') != 0:
-                    # 上传分片失败
-                    print('upload slice fail, response: ' + str(response))
-                    return False
-                print('upload slice ' + str(index) + ' success')
-                index += 1
-        finally:
-            'file index:' + str(file_object.tell())
-            file_object.close()
-        return True
-
-    # 合并
-    def merge_request(self, taskid):
-        return self.gene_request(api_merge, data=self.gene_params(api_merge, taskid=taskid))
-
-    # 获取进度
-    def get_progress_request(self, taskid):
-        return self.gene_request(api_get_progress, data=self.gene_params(api_get_progress, taskid=taskid))
-
-    # 获取结果
-    def get_result_request(self, taskid):
-        return self.gene_request(api_get_result, data=self.gene_params(api_get_result, taskid=taskid))
-
-    def all_api_request(self):
-        # 1. 预处理
-        pre_result = self.prepare_request()
-        taskid = pre_result["data"]
-        # 2 . 分片上传
-        self.upload_request(taskid=taskid, upload_file_path=self.upload_file_path)
-        # 3 . 文件合并
-        self.merge_request(taskid=taskid)
-        # 4 . 获取任务进度
-        while True:
-            # 每隔20秒获取一次任务进度
-            progress = self.get_progress_request(taskid)
-            progress_dic = progress
-            if progress_dic['err_no'] != 0 and progress_dic['err_no'] != 26605:
-                print('task error: ' + progress_dic['failed'])
-                return
-            else:
-                data = progress_dic['data']
-                task_status = json.loads(data)
-                if task_status['status'] == 9:
-                    print('task ' + taskid + ' finished')
-                    break
-                print('The task ' + taskid + ' is in processing, task status: ' + str(data))
-
-            # 每次获取进度间隔20S
-            time.sleep(1)
-        # 5 . 获取结果
-        res = self.get_result_request(taskid=taskid)
-        # 保存到txt
-        data = res['data'].strip('[').strip(']')
-        try:
-            print(json.loads(data))
-        except:
-            print("206 gg")
-        result_data = eval(data)
-        if not isinstance(result_data, tuple):
-            result_data = (result_data,)
-        content = ""
-        for d in result_data:
-            a = d['onebest']
-            content += a
-        return content
-
+from collections import defaultdict
+from .silk import convert_to_silk, to_pcm
+from .xunfei import SliceIdGenerator, XunfeiRequestApi
+from .model import *
+from datetime import datetime
+import random
+# from se import is_quiet_time
 
 # 常量定义
 XYBOT_PREFIX = "-----老夏的金库-----\n"
@@ -299,8 +34,6 @@ DIFY_ERROR_MESSAGE = "🙅对不起，Dify出现错误！\n"
 INSUFFICIENT_POINTS_MESSAGE = "😭你的积分不够啦！需要 {price} 积分"
 VOICE_TRANSCRIPTION_FAILED = "\n语音转文字失败"
 TEXT_TO_VOICE_FAILED = "\n文本转语音失败"
-CHAT_TIMEOUT = 3600  # 1小时超时
-CHAT_AWAY_TIMEOUT = 1800  # 30分钟自动离开
 MESSAGE_BUFFER_TIMEOUT = 10  # 消息缓冲区超时时间（秒）
 MAX_BUFFERED_MESSAGES = 10  # 最大缓冲消息数
 
@@ -327,43 +60,18 @@ CHAT_AWAY_MESSAGE = "💤 已设置为离开状态，其他人将看到你正在
 CHAT_BACK_MESSAGE = "🌟 欢迎回来！已恢复活跃状态"
 CHAT_AUTO_AWAY_MESSAGE = "由于您已经30分钟没有活动，已被自动设置为离开状态。"
 
-class UserStatus(Enum):
-    ACTIVE = "活跃"
-    AWAY = "离开"
-    INACTIVE = "未加入"
-
-@dataclass
-class UserStats:
-    total_messages: int = 0
-    total_chars: int = 0
-    join_count: int = 0
-    last_active: float = 0
-    total_active_time: float = 0
-    status: UserStatus = UserStatus.INACTIVE
-
-@dataclass
-class ChatRoomUser:
-    wxid: str
-    group_id: str
-    last_active: float
-    status: UserStatus = UserStatus.ACTIVE
-    stats: UserStats = field(default_factory=UserStats)
-    
-@dataclass
-class MessageBuffer:
-    messages: list[str] = field(default_factory=list)
-    last_message_time: float = 0.0
-    timer_task: Optional[asyncio.Task] = None
-    message_count: int = 0
-    files: list[str] = field(default_factory=list)
-
+# 消息回复时间间隔
+# 间隔时间 = 字数 * (平均时间 + 随机时间)
+AVERAGE_TYPING_SPEED = 0.2
+RANDOM_TYPING_SPEED_MIN = 0.05
+RANDOM_TYPING_SPEED_MAX = 0.1
 
 class ChatRoomManager:
     def __init__(self):
         self.active_users = {}
         self.message_buffers = defaultdict(lambda: MessageBuffer([], 0.0, None))
         self.user_stats: Dict[tuple[str, str], UserStats] = defaultdict(UserStats)
-        
+
     def add_user(self, group_id: str, user_wxid: str) -> None:
         key = (group_id, user_wxid)
         self.active_users[key] = ChatRoomUser(
@@ -375,7 +83,7 @@ class ChatRoomManager:
         stats.join_count += 1
         stats.last_active = time.time()
         stats.status = UserStatus.ACTIVE
-        
+
     def remove_user(self, group_id: str, user_wxid: str) -> None:
         key = (group_id, user_wxid)
         if key in self.active_users:
@@ -389,7 +97,7 @@ class ChatRoomManager:
             if buffer.timer_task and not buffer.timer_task.done():
                 buffer.timer_task.cancel()
             del self.message_buffers[key]
-            
+
     def update_user_activity(self, group_id: str, user_wxid: str) -> None:
         key = (group_id, user_wxid)
         if key in self.active_users:
@@ -397,29 +105,29 @@ class ChatRoomManager:
             stats = self.user_stats[key]
             stats.total_messages += 1
             stats.last_active = time.time()
-            
+
     def set_user_status(self, group_id: str, user_wxid: str, status: UserStatus) -> None:
         key = (group_id, user_wxid)
         if key in self.active_users:
             self.active_users[key].status = status
             self.user_stats[key].status = status
-            
+
     def get_user_status(self, group_id: str, user_wxid: str) -> UserStatus:
         key = (group_id, user_wxid)
         if key in self.active_users:
             return self.active_users[key].status
         return UserStatus.INACTIVE
-        
+
     def get_user_stats(self, group_id: str, user_wxid: str) -> UserStats:
         return self.user_stats[(group_id, user_wxid)]
-        
+
     def get_room_stats(self, group_id: str) -> List[tuple[str, UserStats]]:
         stats = []
         for (g_id, wxid), user_stats in self.user_stats.items():
             if g_id == group_id:
                 stats.append((wxid, user_stats))
         return sorted(stats, key=lambda x: x[1].total_messages, reverse=True)
-        
+
     def get_active_users_count(self, group_id: str) -> tuple[int, int, int]:
         active = 0
         away = 0
@@ -437,18 +145,19 @@ class ChatRoomManager:
         """添加消息到缓冲区"""
         if files is None:
             files = []
-        
+
         key = (group_id, user_wxid)
         if key not in self.message_buffers:
             self.message_buffers[key] = MessageBuffer()
-        
+
         buffer = self.message_buffers[key]
         buffer.messages.append(message)
         buffer.last_message_time = time.time()
         buffer.message_count += 1
         buffer.files.extend(files)  # 添加文件ID到缓冲区
-        
-        logger.debug(f"成功添加消息到缓冲区 - 用户: {user_wxid}, 消息: {message}, 当前消息数: {buffer.message_count}, 文件: {files}")
+
+        logger.debug(
+            f"成功添加消息到缓冲区 - 用户: {user_wxid}, 消息: {message}, 当前消息数: {buffer.message_count}, 文件: {files}")
 
     def get_and_clear_buffer(self, group_id: str, user_wxid: str) -> Tuple[str, list[str]]:
         """获取并清空缓冲区"""
@@ -468,17 +177,17 @@ class ChatRoomManager:
         key = (group_id, user_wxid)
         if key not in self.active_users:
             return False
-        
+
         user = self.active_users[key]
         if time.time() - user.last_active > CHAT_TIMEOUT:
             self.remove_user(group_id, user_wxid)
             return False
         return True
-        
-    def check_and_remove_inactive_users(self) -> list[tuple[str, str]]:
+
+    def check_and_remove_inactive_users(self):
         current_time = time.time()
         inactive_users = []
-        
+
         for (group_id, user_wxid), user in list(self.active_users.items()):
             if user.status == UserStatus.ACTIVE and current_time - user.last_active > CHAT_AWAY_TIMEOUT:
                 self.set_user_status(group_id, user_wxid, UserStatus.AWAY)
@@ -486,7 +195,6 @@ class ChatRoomManager:
             elif current_time - user.last_active > CHAT_TIMEOUT:
                 inactive_users.append((group_id, user_wxid, "timeout"))
                 self.remove_user(group_id, user_wxid)
-                
         return inactive_users
 
     def format_user_stats(self, group_id: str, user_wxid: str, nickname: str = "未知用户") -> str:
@@ -512,7 +220,7 @@ class ChatRoomManager:
     async def format_room_ranking(self, group_id: str, bot: WechatAPIClient, limit: int = 5) -> str:
         stats = self.get_room_stats(group_id)
         result = ["🏆 聊天室排行榜：\n"]
-        
+
         for i, (wxid, user_stats) in enumerate(stats[:limit], 1):
             try:
                 nickname = await bot.get_nickname(wxid) or "未知用户"
@@ -533,13 +241,6 @@ class ChatRoomManager:
             return "🥉"
         return f"{rank}."
 
-@dataclass
-class ModelConfig:
-    api_key: str
-    base_url: str
-    trigger_words: list[str]
-    price: int
-    wakeup_words: list[str] = field(default_factory=list)  # 添加唤醒词列表字段
 
 @dataclass
 class ImageProcessor:
@@ -808,6 +509,49 @@ class ImageProcessor:
             return None
 
 
+def parse_time(time_str):
+    try:
+        TimeResult = datetime.strptime(time_str, "%H:%M").time()
+        return TimeResult
+    except Exception as e:
+        logger.error("\033[31m错误：主动消息安静时间设置有误！请填00:00-23:59 不要填24:00,并请注意中间的符号为英文冒号！\033[0m")
+
+
+def remove_timestamps(text):
+    """
+    移除文本中所有[YYYY-MM-DD (Weekday) HH:MM(:SS)]格式的时间戳
+    支持四种格式：
+    1. [YYYY-MM-DD Weekday HH:MM:SS] - 带星期和秒
+    2. [YYYY-MM-DD Weekday HH:MM] - 带星期但没有秒
+    3. [YYYY-MM-DD HH:MM:SS] - 带秒但没有星期
+    4. [YYYY-MM-DD HH:MM] - 基本格式
+    并自动清理因去除时间戳产生的多余空格
+    """
+    # 定义支持多种格式的时间戳正则模式
+    timestamp_pattern = r'''
+        \[                # 起始方括号
+        \d{4}             # 年份：4位数字
+        -(0[1-9]|1[0-2])  # 月份：01-12
+        -(0[1-9]|[12]\d|3[01]) # 日期：01-31
+        (?:\s[A-Za-z]+)?  # 可选的星期部分
+        \s                # 日期与时间之间的空格
+        (?:2[0-3]|[01]\d) # 小时：00-23
+        :[0-5]\d          # 分钟：00-59
+        (?::[0-5]\d)?     # 可选的秒数：00-59括号
+    '''
+
+    # 使用正则标志：
+    # 1. re.VERBOSE 允许模式中的注释和空格
+    # 2. re.MULTILINE 跨行匹配
+    # 3. 替换时自动处理前后空格
+    return re.sub(
+        pattern=timestamp_pattern,
+        repl=lambda m: ' ',  # 统一替换为单个空格
+        string=text,
+        flags=re.X | re.M
+    ).strip()  # 最后统一清理首尾空格
+
+
 class Dify2(PluginBase):
     description = "Dify插件"
     author = "老夏的金库"
@@ -829,7 +573,7 @@ class Dify2(PluginBase):
         self._init_file_storage()
         self._init_model_mapping()
         self._init_api_proxy()
-        self.silicon_key = "Bearer sk-nuquonnskijxjttcuubbnqfoohieknygtthpsstwrzzuqdqn"
+        self.silicon_key = "Bearer sk-nuquonnskijxjttcuubbnqfoohieknygtthpsstwrzzuqdqn"  # TODO 处理这里！！！
         self.xunfei_appid = "013c3cdb"
         self.xunfei_secret_key = "2a0a119701adde67d094969c40c0b991"
 
@@ -880,7 +624,17 @@ class Dify2(PluginBase):
             self.text_to_audio_url = plugin_config.get("text-to-audio-url", "")
             self.remember_user_model = plugin_config.get("remember_user_model", True)
             self.chatroom_enable = plugin_config.get("chatroom_enable", True)
-            
+            self.enable_auto_message = plugin_config.get("enable-auto-message", True)
+            self.auto_message = plugin_config.get("auto-message", '请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么')
+            self.min_countdown_hours = plugin_config.get("min-countdown-hours", 1.0)
+            self.max_countdown_hours = plugin_config.get("max-countdown-hours", 2.0)
+            self.quiet_time_start = parse_time(plugin_config.get("quire-time-start", "22:30"))
+            self.quiet_time_end = parse_time(plugin_config.get("quire-time-end", "8:00"))
+            self.user_timers = dict()
+            self.user_names = []
+            self.user_wait_times = {}
+            self.user_is_send_message = {}
+
             # 加载所有模型配置
             self._load_model_configs(plugin_config)
             
@@ -905,6 +659,9 @@ class Dify2(PluginBase):
             logger.error(f"初始化配置时发生未知错误: {e}")
             logger.error(traceback.format_exc())
             raise
+
+    def _init_mock_person(self):
+        pass
 
     def _load_model_configs(self, plugin_config):
         """加载所有模型配置"""
@@ -995,6 +752,71 @@ class Dify2(PluginBase):
         except Exception as e:
             logger.error(f"获取API代理实例失败: {e}")
             logger.error(traceback.format_exc())
+
+    def is_quiet_time(self):
+        current_time = datetime.now().time()
+        if self.quiet_time_start <= self.quiet_time_end:
+            return self.quiet_time_start <= current_time <= self.quiet_time_end
+        else:
+            return current_time >= self.quiet_time_start or current_time <= self.quiet_time_end
+
+    @schedule('interval', seconds=30)
+    async def check_user_timeouts(self, bot: WechatAPIClient):
+        if self.enable_auto_message:
+            current_time = time.time()
+            for user in self.user_names:
+                last_active = self.user_timers.get(user)
+                wait_time = self.user_wait_times.get(user)
+                if last_active and wait_time:
+                    if current_time - last_active >= wait_time:
+                        if not self.is_quiet_time():
+                            # 增加时间标记
+                            current_time = datetime.now().strftime("%Y-%m-%d %A %H:%M:%S")
+                            auto_content = f"[{current_time}] {self.auto_message}"
+                            logger.info(f"为用户 {user} 发送自动消息:{auto_content}")
+                            reply = await self.dify_text(bot, user, bot.wxid, auto_content)
+                            # self.send_reply(user, user, user, self.auto_message, reply)
+                            await self.mock_person_send_reply(bot, user, self.auto_message, reply)
+                        # 重置计时器和等待时间
+                        self.reset_user_timer(user)
+            time.sleep(10)  # 每10秒检查一次
+
+    async def mock_person_send_reply(self, bot, wxid, merged_message, reply):
+        try:
+            # 发送分段消息过程中停止向deepseek发送新请求
+            self.user_is_send_message[wxid] = True
+            reply = remove_timestamps(reply)
+            if '\\' in reply:
+                parts = [p.strip() for p in reply.split('\\') if p.strip()]
+                for i, part in enumerate(parts):
+                    await bot.send_text_message(wxid, part)
+                    logger.info(f"分段回复 {wxid}: {part}")
+                    if i < len(parts) - 1:
+                        next_part = parts[i + 1]
+                        # 计算延时时间，模拟打字速度
+                        delay = len(next_part) * (AVERAGE_TYPING_SPEED + random.uniform(RANDOM_TYPING_SPEED_MIN,
+                                                                                        RANDOM_TYPING_SPEED_MAX))
+                        if delay < 2:
+                            delay = 2
+                        time.sleep(delay)
+            else:
+                await bot.send_text_message(wxid, reply)
+                logger.info(f"回复 {wxid}: {reply}")
+            # 解除发送限制
+            self.user_is_send_message[wxid] = False
+        except Exception as e:
+            logger.error(f"发送回复失败: {str(e)}")
+            # 解除发送限制
+            self.user_is_send_message[wxid] = False
+    # 发送表情
+    # await bot.send_emoji_message("wxid_acs3cg99vu1921", md5="53aceba6128d29d78f66f564029d2228", total_length=1222625)
+
+    def reset_user_timer(self, user):
+        self.user_timers[user] = time.time()
+        self.user_wait_times[user] = self.get_random_wait_time()
+
+    def get_random_wait_time(self):
+        return random.uniform(self.min_countdown_hours, self.max_countdown_hours) * 3600  # 转换为秒
 
     def get_user_model(self, user_id: str) -> ModelConfig:
         """获取用户当前使用的模型"""
@@ -1096,7 +918,9 @@ class Dify2(PluginBase):
                 try:
                     # 检查是否有唤醒词或触发词
                     model, processed_query, is_switch = self.get_model_from_message(messages, user_wxid)
-                    await self.dify(bot, message, processed_query, files=files, specific_model=model)
+                    reply = await self.dify_text(bot, message["SenderWxid"], message["FromWxid"], processed_query, files=files, specific_model=model)
+                    await self.mock_person_send_reply(bot, message["FromWxid"], self.auto_message, reply)
+
                     logger.debug("成功调用 Dify API 并发送消息")
                 except Exception as e:
                     logger.error(f"调用 Dify API 失败: {e}")
@@ -1272,7 +1096,8 @@ class Dify2(PluginBase):
         if wakeup_detected and wakeup_model and processed_wakeup_query:
             if await self._check_point(bot, message, wakeup_model):
                 logger.info(f"使用唤醒词对应模型处理请求")
-                await self.dify(bot, message, processed_wakeup_query, files=files, specific_model=wakeup_model)
+                reply = await self.dify_text(bot, message, processed_wakeup_query, files=files, specific_model=wakeup_model)
+                await self.mock_person_send_reply(bot, message["FromWxid"], self.auto_message, reply)
             return
 
         # 处理@或命令触发的情况
@@ -1416,6 +1241,114 @@ class Dify2(PluginBase):
                 return True
         return False
 
+    async def dify_text(self, bot: WechatAPIClient, sender_wxid:str, from_wxid: str, query: str, files=None, specific_model=None):
+        """发送纯文字消息到Dify API，并且返回纯文字"""
+        if files is None:
+            files = []
+
+        # 如果提供了specific_model，直接使用；否则根据消息内容选择模型
+        if specific_model:
+            model = specific_model
+            processed_query = query
+            is_switch = False
+            model_name = next((name for name, config in self.models.items() if config == model), '未知')
+            logger.info(f"使用指定的模型 '{model_name}'")
+        else:
+            # 根据消息内容选择模型
+            model, processed_query, is_switch = self.get_model_from_message(query, sender_wxid)
+            model_name = next((name for name, config in self.models.items() if config == model), '默认')
+            logger.info(f"从消息内容选择模型 '{model_name}'")
+
+            # 如果是切换模型的命令
+            if is_switch:
+                model_name = next(name for name, config in self.models.items() if config == model)
+                await bot.send_text_message(
+                    from_wxid,
+                    f"已切换到{model_name.upper()}模型，将一直使用该模型直到下次切换。"
+                )
+                return "已切换到{model_name.upper()}模型，将一直使用该模型直到下次切换。"
+
+        # 记录将要使用的模型配置
+        logger.info(f"模型API密钥: {model.api_key[:5]}...{model.api_key[-5:] if len(model.api_key) > 10 else ''}")
+        logger.info(f"模型API端点: {model.base_url}")
+        try:
+            logger.debug(f"开始调用 Dify API - 用户消息: {processed_query}")
+            conversation_id = self.db.get_llm_thread_id(from_wxid, namespace="dify")
+
+            user_wxid = sender_wxid
+            try:
+                user_username = await bot.get_nickname(user_wxid) or "未知用户"
+            except:
+                user_username = "未知用户"
+
+            inputs = {
+                "user_wxid": user_wxid,
+                "user_username": user_username
+            }
+
+            payload = {
+                "inputs": inputs,
+                "query": processed_query,
+                "response_mode": "streaming",
+                "conversation_id": conversation_id,
+                "user": from_wxid,
+                "files": [],
+                "auto_generate_name": False,
+            }
+
+            # 直接连接调用，禁用代理功能
+            use_api_proxy = False
+            logger.debug(f"发送请求到 Dify - URL: {model.base_url}/chat-messages, Payload: {json.dumps(payload)}")
+
+            # 使用直接连接
+            headers = {"Authorization": f"Bearer {model.api_key}", "Content-Type": "application/json"}
+            ai_resp = ""
+            async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
+                async with session.post(url=f"{model.base_url}/chat-messages", headers=headers,
+                                        data=json.dumps(payload)) as resp:
+                    if resp.status in (200, 201):
+                        async for line in resp.content:
+                            line = line.decode("utf-8").strip()
+                            if not line or line == "event: ping":
+                                continue
+                            elif line.startswith("data: "):
+                                line = line[6:]
+                            try:
+                                resp_json = json.loads(line)
+                            except json.JSONDecodeError:
+                                logger.error(f"Dify返回的JSON解析错误: {line}")
+                                continue
+
+                            event = resp_json.get("event", "")
+                            if event == "message":
+                                ai_resp += resp_json.get("answer", "")
+                            elif event == "message_replace":
+                                ai_resp = resp_json.get("answer", "")
+                        new_con_id = resp_json.get("conversation_id", "")
+                        if new_con_id and new_con_id != conversation_id:
+                            self.db.save_llm_thread_id(from_wxid, new_con_id, "dify")
+                        ai_resp = ai_resp.rstrip()
+                        logger.debug(f"Dify响应: {ai_resp}")
+                    elif resp.status == 404:
+                        logger.warning("会话ID不存在，重置会话ID并重试")
+                        self.db.save_llm_thread_id(from_wxid, "", "dify")
+                        # 重要：在递归调用时必须传递原始模型，不要重新选择
+                        return "会话错误：会话ID不存在"
+                    elif resp.status == 400:
+                        return "会话错误：会话返回了400"
+                    elif resp.status == 500:
+                        return "会话错误：会话返回了500"
+                    else:
+                        return "会话错误：会话返回了其它响应状态码"
+            if ai_resp:
+                return ai_resp
+            else:
+                logger.warning("Dify未返回有效响应")
+                return "Dify未返回有效响应"
+        except Exception as e:
+            logger.error(f"Dify API 调用失败: {e}")
+            return f"Dify API 调用失败: {e}"
+
     async def dify(self, bot: WechatAPIClient, message: dict, query: str, files=None, specific_model=None):
         """发送消息到Dify API"""
         if files is None:
@@ -1529,7 +1462,7 @@ class Dify2(PluginBase):
                         logger.warning("会话ID不存在，重置会话ID并重试")
                         self.db.save_llm_thread_id(message["FromWxid"], "", "dify")
                         # 重要：在递归调用时必须传递原始模型，不要重新选择
-                        return await self.dify(bot, message, processed_query, files=files, specific_model=model)
+                        return await self.dify_text(bot, message["SenderWxid"], message["FromWxid"], processed_query, files=files, specific_model=model)
                     elif resp.status == 400:
                         return await self.handle_400(bot, message, resp)
                     elif resp.status == 500:
@@ -1538,7 +1471,9 @@ class Dify2(PluginBase):
                         return await self.handle_other_status(bot, message, resp)
 
             if ai_resp:
-                await self.dify_handle_text(bot, message, ai_resp, model)
+                reply = await self.dify_handle_text(bot, message, ai_resp, model)
+                await self.mock_person_send_reply(bot, bot["FromWxid"], self.auto_message,reply)
+
             else:
                 logger.warning("Dify未返回有效响应")
         except Exception as e:
@@ -1604,11 +1539,12 @@ class Dify2(PluginBase):
             if message["MsgType"] == 34 or len(text) >= self.voice_reply_length:
                 await self.text_to_voice_message(bot, message, text)
             else:
-                paragraphs = text.split("//n")
-                for paragraph in paragraphs:
-                    if paragraph.strip():
-                        await bot.send_text_message(message["FromWxid"], paragraph.strip())
-        
+                # paragraphs = text.split("//n")
+                # for paragraph in paragraphs:
+                #     if paragraph.strip():
+                        # await bot.send_text_message(message["FromWxid"], paragraph.strip())
+                await self.mock_person_send_reply(bot, message["FromWxid"], self.auto_message, text)
+
         # 如果有图片引用，只处理最后一个
         if matches:
             filename, url = matches[-1]  # 只取最后一个图片
@@ -1776,7 +1712,7 @@ class Dify2(PluginBase):
             #     audio = r.record(source)
             # text = r.recognize_google(audio, language="zh-CN")
             speechpath = os.path.abspath(silk_file.replace('.silk', '.wav'))
-            api = RequestApi(appid=self.xunfei_appid, secret_key=self.xunfei_secret_key, upload_file_path=speechpath)
+            api = XunfeiRequestApi(appid=self.xunfei_appid, secret_key=self.xunfei_secret_key, upload_file_path=speechpath)
             text = api.all_api_request()
             logger.info(f"语音转文字结果 (Google): {text}")
             return text
@@ -1968,7 +1904,8 @@ class Dify2(PluginBase):
             
         # 调用API
         try:
-            await self.dify(bot, message, processed_query, files=files, specific_model=model)
+            reply = await self.dify_text(bot, message["SenderWxid"], message["FromWxid"], processed_query, files=files, specific_model=model)
+            await self.mock_person_send_reply(bot, message["FromWxid"], self.auto_message, reply)
             return True
         except Exception as e:
             logger.error(f"调用Dify API失败: {e}")

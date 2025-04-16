@@ -1,6 +1,6 @@
 [Dify]
 enable = true          # 是否启用插件
-default-model = "Y3I3"  # 默认使用的模型
+default-model = "STUDENT"  # 默认使用的模型
 commands = ["ai", "dify", "聊天", "AI", "小可爱", "ZORG", "Y3I3"]
 
 chatroom_enable = false  # 是否启用聊天室功能：
@@ -21,14 +21,23 @@ voice-reply-length = 50        # 是否总是使用语音回复，设为true则�
 
 robot-names = ["Y3I3", "ZORG", "小可爱"]
 
-audio-to-text-url = "http://127.0.0.1/v1/audio-to-text"
-text-to-audio-url = "http://127.0.0.1/v1/text-to-audio"
+audio-to-text-url = "http://raspberrypi.local/v1/audio-to-text"
+text-to-audio-url = "http://raspberrypi.local/v1/text-to-audio"
+
+# 等待时间
+min-countdown-hours = 1.0
+max-countdown-hours = 2.0
+enable-auto-message = true
+auto-message = "请你模拟系统设置的角色，在微信上找对方继续刚刚的话题或者询问对方在做什么"
+# 消息发送时间限制
+quire-time-start = "22:30"
+quire-time-end = "8:00"
 
 [Dify.models]
 # 学姐模型配置
 [Dify.models."Y3I3"]
 api-key = "app-CvUVH3JbuDwILMtZqPEKl6MV"
-base-url = "http://127.0.0.1/v1"
+base-url = "http://raspberrypi.local/v1"
 trigger-words = ["@Y3I3", "@小可爱", "@你愿意做我的小可爱吗"]
 wakeup-words = ["Y3I3", "小可爱", "你愿意做我的小可爱吗"]
 price = 0
@@ -36,8 +45,15 @@ price = 0
 # 老夏模型配置
 [Dify.models."ZORG"]
 api-key = "app-CvUVH3JbuDwILMtZqPEKl6MV"
-base-url = "http://127.0.0.1/v1"
+base-url = "http://raspberrypi.local/v1"
 trigger-words = ["@ZORG"]
 wakeup-words = ["ZORG"]
+price = 0
+
+[Dify.models."STUDENT"]
+api-key = "app-hLu1BHo3P8BkKpWOBih3RT4h"
+base-url = "http://raspberrypi.local/v1"
+trigger-words = ["@大一新生"]
+wakeup-words = ["大一新生"]
 price = 0
 

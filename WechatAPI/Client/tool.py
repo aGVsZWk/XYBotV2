@@ -39,6 +39,35 @@ class ToolMixin(WechatAPIClientBase):
             else:
                 self.error_handler(json_resp)
 
+    # async def download_emoji(self, msg_id: str, request_wxid: str, section: Section) -> str:
+    async def download_emoji(self, msg_id: str, request_wxid: str) -> str:
+        """下载表情文件。
+
+        Args:
+            msg_id (str): 消息的msgid
+            voiceurl (str): 语音的url，从xml获取
+            length (int): 语音长度，从xml获取
+
+        Returns:
+            str: 语音的base64编码字符串
+
+        Raises:
+            UserLoggedOut: 未登录时调用
+            根据error_handler处理错误
+        """
+        if not self.wxid:
+            raise UserLoggedOut("请先登录")
+
+        async with aiohttp.ClientSession() as session:
+            json_param = {"Wxid": self.wxid, "MsgId": msg_id, "RequestWxid": request_wxid}
+            response = await session.post(f'http://{self.ip}:{self.port}/DownloadImg', json=json_param)
+            json_resp = await response.json()
+
+            if json_resp.get("Success"):
+                return json_resp.get("Data").get("data").get("buffer")
+            else:
+                self.error_handler(json_resp)
+
     async def download_voice(self, msg_id: str, voiceurl: str, length: int) -> str:
         """下载语音文件。
 
