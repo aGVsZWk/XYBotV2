@@ -9,6 +9,7 @@ from pydub import AudioSegment
 from .base import *
 from .protect import protector
 from ..errors import *
+from pathlib import Path
 
 
 class ToolMixin(WechatAPIClientBase):
@@ -40,13 +41,11 @@ class ToolMixin(WechatAPIClientBase):
                 self.error_handler(json_resp)
 
     # async def download_emoji(self, msg_id: str, request_wxid: str, section: Section) -> str:
-    async def download_emoji(self, msg_id: str, request_wxid: str) -> str:
+    async def download_emoji(self, cdnurl: str, emoji_md5: str) -> bytes:
         """下载表情文件。
 
         Args:
-            msg_id (str): 消息的msgid
-            voiceurl (str): 语音的url，从xml获取
-            length (int): 语音长度，从xml获取
+            cdnurl (str): xml中的cdnurl信息
 
         Returns:
             str: 语音的base64编码字符串
@@ -57,16 +56,29 @@ class ToolMixin(WechatAPIClientBase):
         """
         if not self.wxid:
             raise UserLoggedOut("请先登录")
-
-        async with aiohttp.ClientSession() as session:
-            json_param = {"Wxid": self.wxid, "MsgId": msg_id, "RequestWxid": request_wxid}
-            response = await session.post(f'http://{self.ip}:{self.port}/DownloadImg', json=json_param)
-            json_resp = await response.json()
-
-            if json_resp.get("Success"):
-                return json_resp.get("Data").get("data").get("buffer")
-            else:
-                self.error_handler(json_resp)
+        script_dir = Path(__file__).resolve().parent.parent.parent
+        emoji_path = script_dir / "resource" / "emoji"
+        if not os.path.exists(emoji_path):
+            os.makedirs(os.path.dirname(emoji_path), exist_ok=True)
+        filename = emoji_md5 + ".gif"
+        filepath = emoji_path / filename
+        if not os.path.exists(filepath):
+            url = cdnurl.replace(";", "&")
+            async with aiohttp.ClientSession() as session:
+                response = await session.get(url)
+                if response.status == 200:
+                    with open(str(filepath), 'wb') as f:
+                        chunk = await response.content.read()  # 每次读取1024字节
+                        f.write(chunk)
+                    return chunk
+                else:
+                    # response.raise_for_status()
+                    json_resp = {"Code": -14, "Message": "表情下载失败"}
+                    self.error_handler(json_resp)
+        else:
+            with open(str(filepath), 'rb') as f:
+                chunk = f.read()  # 每次读取1024字节
+                return chunk
 
     async def download_voice(self, msg_id: str, voiceurl: str, length: int) -> str:
         """下载语音文件。

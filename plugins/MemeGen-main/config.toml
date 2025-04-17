@@ -28,6 +28,7 @@ admin_users = [
     # 添加管理员wxid，例如：
     # "wxid_example123",
     # "wxid_admin456"
+    "wxid_t8p67vpimx0d22"
 ]
 
 [commands]

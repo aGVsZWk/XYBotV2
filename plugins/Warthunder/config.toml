@@ -1,8 +1,0 @@
-[Warthunder]
-enable = false
-command = ["战争雷霆", "战雷查询", "战争雷霆玩家", "战雷玩家"]
-command-format = """
------XYBot-----
-🎮战争雷霆玩家查询：
-战雷查询 玩家名
-"""

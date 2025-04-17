@@ -129,7 +129,7 @@ class XYBot:
                         message["SenderWxid"],
                         message["Ats"],
                         message["Content"])
-            self.chat_history.save_message_to_db(message["FromWxid"], message["SenderWxid"], message["CreateTime"],
+            self.chat_history.save_message_to_db("text", message["FromWxid"], message["SenderWxid"], message["CreateTime"],
                                                  message["Content"])
             if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
                 if self.ignore_protection or not protector.check(14400):
@@ -144,7 +144,7 @@ class XYBot:
                     message["SenderWxid"],
                     message["Ats"],
                     message["Content"])
-        self.chat_history.save_message_to_db(message["FromWxid"], message["SenderWxid"], message["CreateTime"],
+        self.chat_history.save_message_to_db("text", message["FromWxid"], message["SenderWxid"], message["CreateTime"],
                                              message["Content"])
         if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
             if self.ignore_protection or not protector.check(14400):
@@ -227,31 +227,31 @@ class XYBot:
                     message["Content"])
 
         # 解析图片消息
-        aeskey, cdnmidimgurl = None, None
+        emoji_cdnurl, emoji_length, emoji_md5 = None, None, None
         try:
             root = ET.fromstring(message["Content"])
             img_element = root.find('emoji')
             if img_element is not None:
-                aeskey = img_element.get('aeskey')
-                cdnmidimgurl = img_element.get('cdnurl')
-                length = img_element.get('len')
-                # cdnmidimgurl = img_element.get('cdnurl')
+                emoji_cdnurl = img_element.get('cdnurl')
+                emoji_length = img_element.get('len')
+                emoji_md5 = img_element.get('md5')
         except Exception as e:
             logger.error("解析表情消息失败: {}", e)
             return
 
         # 下载图片
-        if aeskey and cdnmidimgurl:
-            # message["Content"] = await self.bot.download_emoji(message["MsgId"], message["ToWxid"], {"dataLen": img_element.get("len"), "startPos": 0})
-
-            message["Content"] = await self.bot.download_emoji(message["MsgId"], message["ToWxid"])
-
+        if emoji_cdnurl and emoji_length and emoji_md5:
+            message["BlobData"] = await self.bot.download_emoji(emoji_cdnurl, emoji_md5)
+            message["Len"] = emoji_length
+            message["MD5"] = emoji_md5
+            message["Content"] = ''
+        self.chat_history.save_message_to_db("emoji", message["FromWxid"], message["SenderWxid"], message["CreateTime"],
+                                             message)
         if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
             if self.ignore_protection or not protector.check(14400):
                 await EventManager.emit("image_message", self.bot, message)
             else:
                 logger.warning("风控保护: 新设备登录后4小时内请挂机")
-
 
     async def process_voice_message(self, message: Dict[str, Any]):
         """处理语音消息"""

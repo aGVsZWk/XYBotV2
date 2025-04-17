@@ -1,24 +1,11 @@
-import asyncio
-import json
-import re
 import tomllib
-import traceback
 from typing import List, Optional, Union
 
 import aiohttp
-import filetype
 from loguru import logger
-import os
 from WechatAPI import WechatAPIClient
 from utils.decorators import *
 from utils.plugin_base import PluginBase
-import os
-import base64
-import asyncio
-import shutil
-from io import BytesIO
-
-from PIL import Image, ImageDraw, ImageFont  # 导入 PIL 库
 
 
 class BiliSearchPlugin(PluginBase):
@@ -73,7 +60,10 @@ class BiliSearchPlugin(PluginBase):
                     if response.status == 200:
                         data = await response.json()
                         # 确保返回结果包含list_url
-                        if data and data["code"] == 200 and "data" in data:
+                        if data and data["code"] == 200 and "data" in data and data["data"]:
+                            if data["data"] is None:
+                                logger.warning(f"API 搜索视频未找到 {keyword}")
+                                return None
                             for item in data["data"]:
                                 if self.LIST_URL_KEY not in item:
                                     logger.warning(f"API 返回结果缺少 {self.LIST_URL_KEY} 字段: {item}")
@@ -366,7 +356,7 @@ class BiliSearchPlugin(PluginBase):
                 return False
 
             else:
-                await bot.send_text_message(chat_id, "未找到相关视频。")
+                await bot.send_text_message(chat_id, f"未找到[{keyword}]相关视频。")
                 logger.warning(f"未找到关键词为 {keyword} 的视频")
                 return False
 
@@ -436,7 +426,7 @@ class BiliSearchPlugin(PluginBase):
         await bot.send_text_message(chat_id, response_text)
         return False
 
-    @on_text_message
+    @on_text_message(priority=99)
     async def handle_text_message(self, bot: WechatAPIClient, message: dict) -> bool:
         """处理文本消息，判断是否需要触发发送视频链接."""
         if not self.enable:

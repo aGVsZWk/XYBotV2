@@ -105,3 +105,5 @@ class WechatAPIClientBase:
             raise Exception(json_resp.get("Message"))
         elif code == -13:  # 上传失败
             raise Exception(json_resp.get("Message"))
+        elif code == -14:  # 表情下载失败
+            raise Exception(json_resp.get("Message"))

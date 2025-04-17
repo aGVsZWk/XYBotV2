@@ -172,6 +172,7 @@ cython_debug/
 
 # XYBot
 resource/robot_stat.json
+resource/emoji/*
 WechatAPI/Client/login_stat.json
 /WechatAPIDocs/_build/doctrees/environment.pickle
 /WechatAPIDocs/_build/doctrees/index.doctree
@@ -221,3 +222,4 @@ plugins/resources/
 /WechatAPI/core/XYWechatPad
 *.db
 *.DS_Store
+.

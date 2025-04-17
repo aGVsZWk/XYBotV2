@@ -1,3 +1,5 @@
+import traceback
+
 from loguru import logger
 import tomllib
 import os
@@ -101,7 +103,7 @@ class MemeGen(PluginBase):
         
         logger.info(f"成功加载表情配置，单人表情: {len(self.single_emojis)}，双人表情: {len(self.two_person_emojis)}")
 
-    @on_text_message()
+    @on_text_message(priority=99)
     async def handle_text(self, bot: WechatAPIClient, message: dict):
         """处理文本消息"""
         if not self.enable:
@@ -118,7 +120,7 @@ class MemeGen(PluginBase):
         # 检查是否请求表情列表
         if content in self.list_commands:
             await self.send_emoji_list(bot, from_wxid)
-            return
+            return False
             
         # 处理清理头像缓存命令
         if content.startswith("清理表情缓存") or content.startswith("清除表情缓存"):
@@ -126,7 +128,7 @@ class MemeGen(PluginBase):
             admin_users = self.get_admin_users()
             if actual_user_id not in admin_users:
                 await bot.send_text_message(from_wxid, "只有管理员才能执行此操作！")
-                return
+                return False
                 
             try:
                 # 提取目标wxid，如果没有则清除所有
@@ -146,12 +148,12 @@ class MemeGen(PluginBase):
             except Exception as e:
                 logger.error(f"清理缓存出错: {str(e)}")
                 await bot.send_text_message(from_wxid, f"清理缓存失败: {str(e)}")
-                return
+                return False
             
         # 检查是否是表情启用/禁用命令
         if re.match(r'^(全局)?(禁用|启用)表情\s+.+$', content):
             await self.handle_enable_disable_commands(bot, message)
-            return
+            return False
             
         # 提取@用户
         at_users = self.extract_at_users(content, message)
@@ -162,7 +164,7 @@ class MemeGen(PluginBase):
         # 如果没有@用户，则不处理（只处理@用户的情况）
         if not at_users:
             logger.info("未提取到@用户，不处理表情生成")
-            return
+            return False
             
         # 清理后的内容（移除@用户部分）
         clean_content = self.clean_at_text(content)
@@ -173,7 +175,7 @@ class MemeGen(PluginBase):
         if (clean_content in self.globally_disabled_emojis or 
             (group_id in self.disabled_emojis and clean_content in self.disabled_emojis[group_id])):
             logger.info(f"表情 {clean_content} 已被禁用，不处理")
-            return
+            return False
         
         # 处理双人表情：格式为 "@用户A 触发词 @用户B"
         if len(at_users) >= 2:
@@ -186,18 +188,18 @@ class MemeGen(PluginBase):
                     first_avatar = await self.download_avatar(bot, at_users[0], from_wxid if is_group else None)
                     if not first_avatar:
                         await bot.send_text_message(from_wxid, f"无法获取用户 {at_users[0]} 的头像")
-                        return
+                        return False
                     
                     # 获取第二个被@用户的头像
                     second_avatar = await self.download_avatar(bot, at_users[1], from_wxid if is_group else None)
                     if not second_avatar:
                         await bot.send_text_message(from_wxid, f"无法获取用户 {at_users[1]} 的头像")
-                        return
+                        return False
                     
                     # 生成并发送双人表情
                     await self.generate_and_send_meme(bot, from_wxid, emoji_type, [first_avatar, second_avatar], two_person=True)
                     logger.info(f"生成双人表情：{trigger_word}，使用用户 {at_users[0]} 和 {at_users[1]} 的头像")
-                    return
+                    return False
             
             logger.info("未找到匹配的双人表情触发词")
                 
@@ -215,7 +217,7 @@ class MemeGen(PluginBase):
                         logger.info(f"生成单人表情：{trigger_word}，使用用户 {at_users[0]} 的头像")
                     else:
                         await bot.send_text_message(from_wxid, f"无法获取用户 {at_users[0]} 的头像")
-                    return
+                    return False
             
             logger.info("未找到匹配的单人表情触发词")
         
@@ -232,7 +234,8 @@ class MemeGen(PluginBase):
             
             # 生成表情
             result = meme_gen(images=avatars, texts=[], args={"circle": True})
-            
+            result = meme_gen()
+
             # 处理协程结果
             if asyncio.iscoroutine(result):
                 buf_gif = await result
@@ -244,7 +247,7 @@ class MemeGen(PluginBase):
             logger.info(f"成功发送表情: {emoji_type}")
             
         except Exception as e:
-            logger.error(f"生成表情失败: {str(e)}")
+            logger.error(f"生成表情失败: {str(e)}\n{traceback.format_exc()}")
             await bot.send_text_message(to_wxid, f"生成表情失败: {str(e)}")
 
     async def download_avatar(self, bot, wxid, from_wxid=None, force_update=False):
@@ -440,7 +443,7 @@ class MemeGen(PluginBase):
     def clean_at_text(self, content):
         """移除所有@部分并返回清理后的字符串"""
         # 修改正则表达式，避免过度清理
-        clean_content = re.sub(r'@[\u4e00-\u9fa5a-zA-Z0-9_\^\-~\*]+(?:\s*[\u4e00-\u9fa5a-zA-Z0-9_\^\-~\*]+)*\s*', '', content)
+        clean_content = re.sub(r'@[\u4e00-\u9fa5a-zA-Z0-9_\^\-~\*]+(?:\s*[\u4e00-\u9fa5a-zA-Z0-9_\^\-~\*]+)*[\s|\u2005]*', '', content)
         result = clean_content.strip()
         logger.debug(f"原内容: '{content}', 清理后: '{result}'")
         return result

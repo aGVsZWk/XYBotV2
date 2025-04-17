@@ -141,7 +141,7 @@ class MessageMixin(WechatAPIClientBase):
             if json_resp.get("Success"):
                 logger.info("发送文字消息: 对方wxid:{} at:{} 内容:{}", wxid, at, content)
                 data = json_resp.get("Data")
-                self.chat_history.save_message_to_db(wxid, self.wxid, data.get("List")[0].get("Createtime"), content)
+                self.chat_history.save_message_to_db("text", wxid, self.wxid, data.get("List")[0].get("Createtime"), content)
                 return data.get("List")[0].get("ClientMsgid"), data.get("List")[0].get("Createtime"), data.get("List")[
                     0].get("NewMsgId")
             else:
