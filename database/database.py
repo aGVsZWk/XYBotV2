@@ -521,7 +521,7 @@ class ChatHistoryDatabase(metaclass=Singleton):
         except sqlite3.Error as e:
             logger.exception(f"保存消息到表 {table_name} 失败: {e}")
 
-    def get_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None) -> List[Dict]:
+    def get_text_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None) -> List[Dict]:
         """从数据库获取消息，同时支持按条数和按时间范围获取"""
         table_name = self.get_text_table_name(chat_id)
         try:
@@ -553,6 +553,50 @@ class ChatHistoryDatabase(metaclass=Singleton):
                     'sender_wxid': row[0],
                     'create_time': row[1],
                     'content': row[2]
+                })
+            if duration:
+                logger.debug(f"从表 {table_name} 获取消息: duration={duration}, 数量={len(messages)}")
+            else:
+                logger.debug(f"从表 {table_name} 获取消息: limit={limit}, 数量={len(messages)}")
+            return messages
+        except sqlite3.Error as e:
+            logger.exception(f"从表 {table_name} 获取消息失败: {e}")
+            return []
+
+    def get_emoji_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None) -> List[Dict]:
+        """从数据库获取消息，同时支持按条数和按时间范围获取"""
+        table_name = self.get_emoji_table_name(chat_id)
+        try:
+            cursor = self.db_connection.cursor()
+            if duration:
+                cutoff_time = datetime.datetime.now() - duration
+                cutoff_timestamp = int(cutoff_time.timestamp())
+                cursor.execute(f"""
+                    SELECT sender_wxid, create_time, content, blob_data, len, md5
+                    FROM "{table_name}"
+                    WHERE create_time >= ?
+                    ORDER BY create_time DESC
+                """, (cutoff_timestamp,))
+            elif limit:
+                cursor.execute(f"""
+                    SELECT sender_wxid, create_time, content, blob_data, len, md5
+                    FROM "{table_name}"
+                    ORDER BY create_time DESC
+                    LIMIT ?
+                """, (limit,))
+            else:
+                return []  #避免不传limit和duration的情况
+            rows = cursor.fetchall()
+            # 将结果转换为字典列表，方便后续使用
+            messages = []
+            for row in rows:
+                messages.append({
+                    'sender_wxid': row[0],
+                    'create_time': row[1],
+                    'content': row[2],
+                    'blob_data': row[3],
+                    'len': row[4],
+                    'md5': row[5],
                 })
             if duration:
                 logger.debug(f"从表 {table_name} 获取消息: duration={duration}, 数量={len(messages)}")

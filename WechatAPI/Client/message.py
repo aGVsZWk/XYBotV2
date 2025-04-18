@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import os
+import time
 from asyncio import Future
 from asyncio import Queue, sleep
 from io import BytesIO
@@ -426,8 +427,17 @@ class MessageMixin(WechatAPIClientBase):
             json_param = {"Wxid": self.wxid, "ToWxid": wxid, "Md5": md5, "TotalLen": total_length}
             response = await session.post(f'http://{self.ip}:{self.port}/SendEmojiMsg', json=json_param)
             json_resp = await response.json()
-
             if json_resp.get("Success"):
+                t = {
+                    'Content': '',
+                    'BlobData': b'',
+                    'Len': total_length,
+                    'MD5': md5
+                }
+                self.chat_history.save_message_to_db("emoji", wxid, self.wxid, int(time.time()), t)
+
+                # save_message_to_db(self, message_type, chat_id: str, sender_wxid: str, create_time: int, content:any):
+
                 logger.info("发送表情消息: 对方wxid:{} md5:{} 总长度:{}", wxid, md5, total_length)
                 return json_resp.get("Data").get("emojiItem")
             else:

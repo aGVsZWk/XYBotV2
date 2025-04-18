@@ -2,7 +2,7 @@
 
 [basic]
 # 插件是否启用
-enable = true
+enable = false
 # 是否使用文件助手缓存
 use_filehelper_cache = true
 # 文件助手的wxid

@@ -131,7 +131,7 @@ class ChatSummary(PluginBase):
                 return # 理论上不应该发生
 
             # 从数据库中获取聊天记录
-            messages_to_summarize = self.chat_history.get_messages_from_db(chat_id, limit, duration)
+            messages_to_summarize = self.chat_history.get_text_messages_from_db(chat_id, limit, duration)
 
             if not messages_to_summarize:
                 try:

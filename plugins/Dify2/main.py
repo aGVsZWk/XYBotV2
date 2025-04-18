@@ -9,7 +9,7 @@ import aiohttp
 import filetype
 from loguru import logger
 from WechatAPI import WechatAPIClient
-from database.database import BotDatabase as XYBotDB
+from database.database import BotDatabase as XYBotDB, ChatHistoryDatabase
 from utils.decorators import *
 from utils.plugin_base import PluginBase
 import traceback
@@ -562,7 +562,7 @@ class Dify2(PluginBase):
         self.enable = True
         self.chat_manager = ChatRoomManager()
         self.user_models = {}  # 保存用户当前使用的模型
-        
+        self.chat_history = ChatHistoryDatabase()
         # 添加变量用于标记API代理是否可用
         self.has_api_proxy = False  # 设置为False，禁用API代理功能
         
@@ -1232,6 +1232,33 @@ class Dify2(PluginBase):
         await self._process_message_with_model(bot, message, query)
         return False
 
+    @on_image_message(priority=20)
+    async def handle_image(self, bot: WechatAPIClient, message: dict):
+        """处理图片消息"""
+        if not self.enable:
+            return
+
+        try:
+            # 使用图片处理器提取图片
+            image_content = await self.image_processor.extract_image_from_message(message)
+            if image_content:
+                # 缓存图片
+                self.image_processor.cache_image(message["FromWxid"], image_content)
+                logger.debug(f"成功缓存用户 {message['FromWxid']} 的图片")
+        except Exception as e:
+            logger.error(f"处理图片消息失败: {e}")
+            logger.debug(traceback.format_exc())
+            
+    @on_emoji_message(priority=20)
+    async def handle_emoji(self, bot: WechatAPIClient, message: dict):
+        """处理表情消息"""
+        if not self.enable:
+            return
+        emoji_msg_list = self.chat_history.get_emoji_messages_from_db(message["FromWxid"], limit=1000)
+        msg = random.choice(emoji_msg_list)
+        await bot.send_emoji_message(message["FromWxid"], msg["md5"], msg["len"])
+        return True
+
     def is_at_message(self, message: dict) -> bool:
         if not message["IsGroup"]:
             return False
@@ -1760,23 +1787,6 @@ class Dify2(PluginBase):
             logger.error(f"text-to-audio 接口调用异常: {e}")
             traceback.print_exc()
             await bot.send_text_message(message["FromWxid"], f"{TEXT_TO_VOICE_FAILED}: {str(e)}")
-
-    @on_image_message(priority=20)
-    async def handle_image(self, bot: WechatAPIClient, message: dict):
-        """处理图片消息"""
-        if not self.enable:
-            return
-        
-        try:
-            # 使用图片处理器提取图片
-            image_content = await self.image_processor.extract_image_from_message(message)
-            if image_content:
-                # 缓存图片
-                self.image_processor.cache_image(message["FromWxid"], image_content)
-                logger.debug(f"成功缓存用户 {message['FromWxid']} 的图片")
-        except Exception as e:
-            logger.error(f"处理图片消息失败: {e}")
-            logger.debug(traceback.format_exc())
 
     async def get_cached_image(self, user_wxid: str) -> Optional[bytes]:
         """获取用户最近的图片，兼容旧代码用的包装函数"""

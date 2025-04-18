@@ -80,8 +80,6 @@ class XYBot:
         elif msg_type == 51:
             pass
         elif msg_type == 47:
-            # await self.process_image_message(message)
-            logger.info("收到的可能是表情信息: {}", message)
             await self.process_emoji_message(message)
         else:
             logger.info("未知的消息类型: {}", message)
@@ -249,7 +247,7 @@ class XYBot:
                                              message)
         if self.ignore_check(message["FromWxid"], message["SenderWxid"]):
             if self.ignore_protection or not protector.check(14400):
-                await EventManager.emit("image_message", self.bot, message)
+                await EventManager.emit("emoji_message", self.bot, message)
             else:
                 logger.warning("风控保护: 新设备登录后4小时内请挂机")
 

@@ -18,7 +18,7 @@ import collections
 import random
 
 
-def get_messages_from_db(chat_id: str = None, chat_table: str = None, limit: Optional[int] = None,
+def get_text_messages_from_db(chat_id: str = None, chat_table: str = None, limit: Optional[int] = None,
                          duration: Optional[timedelta] = None) -> List[Dict]:
     """从数据库获取消息，同时支持按条数和按时间范围获取"""
     if chat_table is None:
@@ -130,13 +130,13 @@ def main():
     table = "chat_45238224202_chatroom"
     recent_chat_time = -1
     # 查询历史记录
-    # self.get_messages_from_db(table)
+    # self.get_text_messages_from_db(table)
     messages = []
     all_recent_time = dict()
     last_recent_time = dict()
     all_predit_time = dict()
     try:
-        messages = get_messages_from_db(chat_table=table, limit=1000)
+        messages = get_text_messages_from_db(chat_table=table, limit=1000)
         # all_chat_msg[table] = messages
         if len(messages) > 0:
             recent_chat_time = messages[0]["create_time"]
