@@ -466,7 +466,6 @@ class ChatHistoryDatabase(metaclass=Singleton):
                         content TEXT NOT NULL
                     )
                 """)
-                self.db_connection.commit()
             elif message_type == "emoji":
                 table_name = self.get_emoji_table_name(chat_id)
                 cursor = self.db_connection.cursor()
@@ -481,7 +480,19 @@ class ChatHistoryDatabase(metaclass=Singleton):
                         md5 TEXT NOT NULL
                     )
                 """)
-                self.db_connection.commit()
+            elif message_type == "memory":
+                table_name = self.get_memory_table_name(chat_id)
+                cursor = self.db_connection.cursor()
+                cursor.execute(f"""
+                    CREATE TABLE IF NOT EXISTS "{table_name}" (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        create_time INTEGER NOT NULL,  -- 使用 INTEGER 存储时间戳
+                        importance INTEGER NOT NULL,    -- 重要程度
+                        summary TEXT NOT NULL, --- 总结文本
+                        content TEXT NOT NULL
+                    )
+                """)
+            self.db_connection.commit()
             logger.info(f"表 {table_name} 创建成功")
         except sqlite3.Error as e:
             logger.error(f"创建表 {table_name} 失败：{e}")
@@ -498,6 +509,12 @@ class ChatHistoryDatabase(metaclass=Singleton):
         生成表名，将chat_id中的特殊字符替换掉，避免SQL注入和表名错误
         """
         return "chat_emoji_" + re.sub(r"[^a-zA-Z0-9_]", "_", chat_id)
+
+    def get_memory_table_name(self, chat_id: str) -> str:
+        """
+        生成表名，将chat_id中的特殊字符替换掉，避免SQL注入和表名错误
+        """
+        return "chat_memory_" + re.sub(r"[^a-zA-Z0-9_]", "_", chat_id)
 
     def save_message_to_db(self, message_type, chat_id: str, sender_wxid: str, create_time: int, content: any):
         """将消息保存到数据库"""
@@ -517,11 +534,18 @@ class ChatHistoryDatabase(metaclass=Singleton):
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (sender_wxid, create_time, content['Content'], content['BlobData'], content['Len'], content['MD5']))
                 self.db_connection.commit()
-            logger.debug(f"消息保存到表 {table_name}: sender_wxid={sender_wxid}, create_time={create_time}")
+            elif message_type == "memory":
+                cursor = self.db_connection.cursor()
+                cursor.execute(f"""
+                    INSERT INTO "{table_name}" (create_time, importance, summary, content)
+                    VALUES (?, ?, ?)
+                """, (create_time, content["Importance"], content["Summary"], content["Content"]))
+                self.db_connection.commit()
+            logger.debug(f"消息保存到表 {table_name}: sender_wxid={sender_wxid}, chat_id={chat_id}, create_time={create_time}")
         except sqlite3.Error as e:
             logger.exception(f"保存消息到表 {table_name} 失败: {e}")
 
-    def get_text_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None) -> List[Dict]:
+    def get_text_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None, start_time:int=-1) -> List[Dict]:
         """从数据库获取消息，同时支持按条数和按时间范围获取"""
         table_name = self.get_text_table_name(chat_id)
         try:
@@ -543,6 +567,12 @@ class ChatHistoryDatabase(metaclass=Singleton):
                     ORDER BY create_time DESC
                     LIMIT ?
                 """, (limit,))
+            elif start_time:
+                cursor.execute(f"""
+                    SELECT sender_wxid, create_time, content
+                    FROM "{table_name}"
+                    WHERE create_time>? ORDER BY create_time DESC
+                """, (start_time,))
             else:
                 return []  #避免不传limit和duration的情况
             rows = cursor.fetchall()
@@ -597,6 +627,55 @@ class ChatHistoryDatabase(metaclass=Singleton):
                     'blob_data': row[3],
                     'len': row[4],
                     'md5': row[5],
+                })
+            if duration:
+                logger.debug(f"从表 {table_name} 获取消息: duration={duration}, 数量={len(messages)}")
+            else:
+                logger.debug(f"从表 {table_name} 获取消息: limit={limit}, 数量={len(messages)}")
+            return messages
+        except sqlite3.Error as e:
+            logger.exception(f"从表 {table_name} 获取消息失败: {e}")
+            return []
+
+    def get_memory_messages_from_db(self, chat_id: str, limit: Optional[int] = None, duration: Optional[timedelta] = None, sort_by_importance: Optional[bool] = None) -> List[Dict]:
+        """从数据库获取消息，同时支持按条数和按时间范围获取"""
+        table_name = self.get_memory_table_name(chat_id)
+        try:
+            cursor = self.db_connection.cursor()
+            if duration:
+                cutoff_time = datetime.datetime.now() - duration
+                cutoff_timestamp = int(cutoff_time.timestamp())
+                cursor.execute(f"""
+                    SELECT create_time, importance, summary, content
+                    FROM "{table_name}"
+                    WHERE create_time >= ?
+                    ORDER BY create_time DESC
+                """, (cutoff_timestamp,))
+            elif limit:
+                cursor.execute(f"""
+                    SELECT create_time, importance, summary, content
+                    FROM "{table_name}"
+                    ORDER BY create_time DESC
+                    LIMIT ?
+                """, (limit,))
+            elif sort_by_importance and limit:
+                cursor.execute(f"""
+                    SELECT create_time, importance, summary, content
+                    FROM "{table_name}"
+                    ORDER BY importance DESC limit ?
+                    LIMIT ?
+                """, (limit,))
+            else:
+                return []  #避免不传limit和duration的情况
+            rows = cursor.fetchall()
+            # 将结果转换为字典列表，方便后续使用
+            messages = []
+            for row in rows:
+                messages.append({
+                    'create_time': row[0],
+                    'importance': row[1],
+                    'summary': row[2],
+                    'content': row[3]
                 })
             if duration:
                 logger.debug(f"从表 {table_name} 获取消息: duration={duration}, 数量={len(messages)}")

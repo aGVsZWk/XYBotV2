@@ -65,6 +65,8 @@ CHAT_AUTO_AWAY_MESSAGE = "由于您已经30分钟没有活动，已被自动设�
 AVERAGE_TYPING_SPEED = 0.2
 RANDOM_TYPING_SPEED_MIN = 0.05
 RANDOM_TYPING_SPEED_MAX = 0.1
+MEMORY_SEGMENT_PATTERN = r'## 记忆片段 \[(.*?)\]\n(?:\*{2}重要度\*{2}: (\d*)\n)?\*{2}摘要\*{2}:(.*?)(?=\n## 记忆片段 |\Z)'
+
 
 class ChatRoomManager:
     def __init__(self):
@@ -630,8 +632,12 @@ class Dify2(PluginBase):
             self.max_countdown_hours = plugin_config.get("max-countdown-hours", 2.0)
             self.quiet_time_start = parse_time(plugin_config.get("quire-time-start", "22:30"))
             self.quiet_time_end = parse_time(plugin_config.get("quire-time-end", "8:00"))
+            self.enable_memory = plugin_config.get("enable-memory", True)
+            self.max_message_entries = plugin_config.get("max-message-entries", 30)
+            self.sumnmary_workflow_api_key = plugin_config.get("sumnmary-workflow-api-key")
+            self.sumnmary_workflow_base_url = plugin_config.get("sumnmary-workflow-base-url")
             self.user_timers = dict()
-            self.user_names = []
+            self.user_names = ["wxid_acs3cg99vu1921"]
             self.user_wait_times = {}
             self.user_is_send_message = {}
 
@@ -760,6 +766,37 @@ class Dify2(PluginBase):
         else:
             return current_time >= self.quiet_time_start or current_time <= self.quiet_time_end
 
+    @schedule('interval', seconds=60)
+    async def memory_manager(self, bot: WechatAPIClient):
+        if self.enable_memory:
+            try:
+                # 检查所有监听用户
+                for user in self.user_names:
+                    memory_message = self.chat_history.get_memory_messages_from_db(user, limit=1)
+                    if len(memory_message) == 0:
+                        memory_time = -1
+                    else:
+                        memory_time = memory_message[0]["create_time"]
+                    messages = self.chat_history.get_text_messages_from_db(user, start_time=memory_time)
+                    # TODO 记忆淘汰机制
+                    # if len(messages) > self.max_message_entries:  # 进行总结，入库
+                    if len(messages) > 0:  # 进行总结，入库
+                        message_str = '\n'.join(['{}, {}, {}'.format(message['create_time'], message['sender_wxid'], message['content']) for message in messages])
+                        summary, importrance = await self.summarize_and_save(user, bot.wxid, message_str)
+                        content = {
+                            "Importance": importrance,
+                            "Summary": summary,
+                            "Content": message_str
+                        }
+                        self.chat_history.save_message_to_db(message_type="memory", chat_id=user, sender_wxid='', create_time=int(time.time()), content=content)
+            except Exception as e:
+                logger.error(f"记忆管理异常: {str(e)}")
+
+    async def summarize_and_save(self, user_name, self_name, message_str):
+        summary_prompt = f"请以{self_name}的视角，用中文总结与{user_name}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{message_str}"
+        summary_text, importance = await self.dify_workflow(user_name, self_name, summary_prompt)
+        return summary_text, importance
+
     @schedule('interval', seconds=30)
     async def check_user_timeouts(self, bot: WechatAPIClient):
         if self.enable_auto_message:
@@ -779,7 +816,6 @@ class Dify2(PluginBase):
                             await self.mock_person_send_reply(bot, user, self.auto_message, reply)
                         # 重置计时器和等待时间
                         self.reset_user_timer(user)
-            time.sleep(10)  # 每10秒检查一次
 
     async def mock_person_send_reply(self, bot, wxid, merged_message, reply):
         try:
@@ -1267,6 +1303,66 @@ class Dify2(PluginBase):
             if f"@{robot_name}" in content:
                 return True
         return False
+
+    async def dify_workflow(self, user_name, self_name, summary_prompt):
+        try:
+            # 使用直接连接
+            headers = {"Authorization": f"Bearer {self.sumnmary_workflow_api_key}", "Content-Type": "application/json"}
+            ai_resp = ""
+            payload = {
+                "inputs": {
+                    "summary_prompt": summary_prompt
+                },
+                "response_mode": "streaming",
+                "user": "1234"
+            }
+            conversation_id = self.db.get_llm_thread_id(user_name, namespace="dify")
+            async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
+                async with session.post(url=f"{self.sumnmary_workflow_base_url}/workflows/run", headers=headers,
+                                        data=json.dumps(payload)) as resp:
+                    if resp.status in (200, 201):
+                        async for line in resp.content:
+                            line = line.decode("utf-8").strip()
+                            if not line or line == "event: ping":
+                                continue
+                            elif line.startswith("data: "):
+                                line = line[6:]
+                            try:
+                                resp_json = json.loads(line)
+                            except json.JSONDecodeError:
+                                logger.error(f"Dify返回的JSON解析错误: {line}")
+                                continue
+
+                            event = resp_json.get("event", "")
+                            if event == "message":
+                                ai_resp += resp_json.get("answer", "")
+                            elif event == "message_replace":
+                                ai_resp = resp_json.get("answer", "")
+                        new_con_id = resp_json.get("conversation_id", "")
+                        if new_con_id and new_con_id != conversation_id:
+                            self.db.save_llm_thread_id(user_name, new_con_id, "dify")
+                        ai_resp = ai_resp.rstrip()
+                        logger.debug(f"Dify响应: {ai_resp}")
+                    elif resp.status == 404:
+                        logger.warning("会话ID不存在，重置会话ID并重试")
+                        self.db.save_llm_thread_id(user_name, "", "dify")
+                        # 重要：在递归调用时必须传递原始模型，不要重新选择
+                        return "会话错误：会话ID不存在"
+                    elif resp.status == 400:
+                        return "会话错误：会话返回了400"
+                    elif resp.status == 500:
+                        return "会话错误：会话返回了500"
+                    else:
+                        return "会话错误：会话返回了其它响应状态码"
+            if ai_resp:
+                return ai_resp
+            else:
+                logger.warning("Dify未返回有效响应")
+                return "Dify未返回有效响应"
+        except Exception as e:
+            logger.error(f"Dify API 调用失败: {e}")
+            return f"Dify API 调用失败: {e}"
+
 
     async def dify_text(self, bot: WechatAPIClient, sender_wxid:str, from_wxid: str, query: str, files=None, specific_model=None):
         """发送纯文字消息到Dify API，并且返回纯文字"""

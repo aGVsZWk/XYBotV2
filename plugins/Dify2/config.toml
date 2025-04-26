@@ -32,6 +32,12 @@ auto-message = "请你模拟系统设置的角色，在微信上找对方继续�
 # 消息发送时间限制
 quire-time-start = "22:30"
 quire-time-end = "8:00"
+enable-memory = true
+max-message-entries = 30
+
+
+sumnmary-workflow-api-key = "app-BuqdRIbyavMfCzNGjBsujjE2"
+sumnmary-workflow-base-url = "http://raspberrypi.local/v1"
 
 [Dify.models]
 # 学姐模型配置
