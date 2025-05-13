@@ -782,9 +782,9 @@ class Dify2(PluginBase):
                     # if len(messages) > self.max_message_entries:  # 进行总结，入库
                     if len(messages) > 0:  # 进行总结，入库
                         message_str = '\n'.join(['{}, {}, {}'.format(message['create_time'], message['sender_wxid'], message['content']) for message in messages])
-                        summary, importrance = await self.summarize_and_save(user, bot.wxid, message_str)
+                        summary, importance = await self.summarize_and_save(user, bot.wxid, message_str)
                         content = {
-                            "Importance": importrance,
+                            "Importance": importance,
                             "Summary": summary,
                             "Content": message_str
                         }
@@ -794,7 +794,18 @@ class Dify2(PluginBase):
 
     async def summarize_and_save(self, user_name, self_name, message_str):
         summary_prompt = f"请以{self_name}的视角，用中文总结与{user_name}的对话，提取重要信息总结为一段话作为记忆片段（直接回复一段话）：\n{message_str}"
-        summary_text, importance = await self.dify_workflow(user_name, self_name, summary_prompt)
+        summary_text = await self.dify_workflow(user_name, self_name, summary_prompt)
+        # --- 评估重要性 ---
+        importance_prompt = f"为以下记忆的重要性评分（1-5，直接回复数字）：\n{summary_text}"
+        importance_response = await self.dify_workflow(user_name, self_name, importance_prompt)
+        # 强化重要性提取逻辑
+        importance_match = re.search(r'[1-5]', importance_response)
+        if importance_match:
+            importance = min(max(int(importance_match.group()), 1), 5)  # 确保1-5范围
+        else:
+            importance = 3  # 默认值
+            logger.warning(f"无法解析重要性评分，使用默认值3。原始响应：{importance_response}")
+
         return summary_text, importance
 
     @schedule('interval', seconds=30)
@@ -1313,35 +1324,21 @@ class Dify2(PluginBase):
                 "inputs": {
                     "summary_prompt": summary_prompt
                 },
-                "response_mode": "streaming",
-                "user": "1234"
+                "response_mode": "blocking",
+                "user": "abc-123"
             }
             conversation_id = self.db.get_llm_thread_id(user_name, namespace="dify")
             async with aiohttp.ClientSession(proxy=self.http_proxy) as session:
                 async with session.post(url=f"{self.sumnmary_workflow_base_url}/workflows/run", headers=headers,
                                         data=json.dumps(payload)) as resp:
                     if resp.status in (200, 201):
-                        async for line in resp.content:
-                            line = line.decode("utf-8").strip()
-                            if not line or line == "event: ping":
-                                continue
-                            elif line.startswith("data: "):
-                                line = line[6:]
-                            try:
-                                resp_json = json.loads(line)
-                            except json.JSONDecodeError:
-                                logger.error(f"Dify返回的JSON解析错误: {line}")
-                                continue
-
-                            event = resp_json.get("event", "")
-                            if event == "message":
-                                ai_resp += resp_json.get("answer", "")
-                            elif event == "message_replace":
-                                ai_resp = resp_json.get("answer", "")
-                        new_con_id = resp_json.get("conversation_id", "")
+                        line = await resp.content.read()
+                        line = line.decode("utf-8").strip()
+                        resp_json = json.loads(line)
+                        new_con_id = resp_json.get("workflow_id", "")
                         if new_con_id and new_con_id != conversation_id:
                             self.db.save_llm_thread_id(user_name, new_con_id, "dify")
-                        ai_resp = ai_resp.rstrip()
+                        ai_resp = resp_json["data"]["outputs"]["text"]
                         logger.debug(f"Dify响应: {ai_resp}")
                     elif resp.status == 404:
                         logger.warning("会话ID不存在，重置会话ID并重试")

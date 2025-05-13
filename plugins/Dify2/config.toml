@@ -36,7 +36,7 @@ enable-memory = true
 max-message-entries = 30
 
 
-sumnmary-workflow-api-key = "app-BuqdRIbyavMfCzNGjBsujjE2"
+sumnmary-workflow-api-key = "app-jR5A9PXjF3Rl4l0tMuQaeXbQ"
 sumnmary-workflow-base-url = "http://raspberrypi.local/v1"
 
 [Dify.models]

@@ -538,7 +538,7 @@ class ChatHistoryDatabase(metaclass=Singleton):
                 cursor = self.db_connection.cursor()
                 cursor.execute(f"""
                     INSERT INTO "{table_name}" (create_time, importance, summary, content)
-                    VALUES (?, ?, ?)
+                    VALUES (?, ?, ?, ?)
                 """, (create_time, content["Importance"], content["Summary"], content["Content"]))
                 self.db_connection.commit()
             logger.debug(f"消息保存到表 {table_name}: sender_wxid={sender_wxid}, chat_id={chat_id}, create_time={create_time}")
